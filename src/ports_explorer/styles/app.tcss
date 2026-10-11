@@ -1,0 +1,372 @@
+/* ==========================================================================
+   Ports Explorer — design system
+   Coral = emphasis, cyan = network, lime = healthy/established,
+   amber = listening/warning, purple = navigation, muted = metadata.
+   ========================================================================== */
+
+$surface: #14121B;
+$surface-alt: #1E1B28;
+$surface-raised: #262233;
+$coral: #FF5C8A;
+$cyan: #4ECDC4;
+$lime: #6BCB77;
+$amber: #FF9F43;
+$yellow: #FFD93D;
+$purple: #B983FF;
+$blue: #4D96FF;
+$muted: #8A8496;
+$cotton: #F2EAE0;
+$caramel: #C08B4F;
+$grape: #8E6CC7;
+$mint: #4ECDC4;
+$danger: #FF5470;
+
+Screen {
+    background: $surface;
+    color: $cotton;
+}
+
+/* ── Branded header ─────────────────────────────────────────────────── */
+
+#app-header {
+    dock: top;
+    height: 1;
+    background: $surface-alt;
+}
+
+#header-title {
+    width: 1fr;
+    padding: 0 2;
+    content-align: left middle;
+}
+
+#header-title .brand {
+    color: $coral;
+    text-style: bold;
+}
+
+#header-title .tagline {
+    color: $muted;
+}
+
+#header-subtitle {
+    width: auto;
+    padding: 0 2;
+    content-align: right middle;
+    color: $muted;
+}
+
+#header-subtitle .accent {
+    color: $purple;
+}
+
+/* ── Banner (breadcrumb + back button) ──────────────────────────────── */
+
+#banner {
+    height: 1;
+    background: $surface-alt;
+}
+
+#back-button {
+    width: auto;
+    min-width: 10;
+    height: 1;
+    margin: 0 0 0 1;
+    padding: 0 1;
+    background: $surface-raised;
+    color: $purple;
+    text-style: bold;
+    border: none;
+}
+
+#back-button:hover {
+    background: $purple;
+    color: $surface;
+}
+
+#back-button:focus {
+    background: $purple;
+    color: $surface;
+    text-style: bold;
+}
+
+#breadcrumb {
+    width: 1fr;
+    padding: 0 1;
+    content-align: left middle;
+}
+
+#breadcrumb .sep {
+    color: $caramel;
+}
+
+#breadcrumb .current {
+    color: $cotton;
+    text-style: bold;
+}
+
+/* ── Search row ─────────────────────────────────────────────────────── */
+
+#search-row {
+    height: 3;
+    padding: 0 1;
+}
+
+#process-search, #resource-search {
+    width: 1fr;
+}
+
+Input {
+    background: $surface-alt;
+    border: tall $surface-raised;
+    color: $cotton;
+}
+
+Input:focus {
+    border: tall $purple;
+}
+
+Input > .input--placeholder {
+    color: $muted;
+}
+
+/* ── Tables ─────────────────────────────────────────────────────────── */
+
+DataTable {
+    background: $surface;
+    color: $cotton;
+}
+
+DataTable > .datatable--header {
+    background: $surface-alt;
+    color: $purple;
+    text-style: bold;
+}
+
+DataTable > .datatable--cursor {
+    background: $purple 35%;
+    color: $cotton;
+    text-style: none;
+}
+
+DataTable > .datatable--hover {
+    background: $surface-raised;
+}
+
+DataTable > .datatable--odd-row {
+    background: $surface-alt 60%;
+}
+
+DataTable > .datatable--even-row {
+    background: $surface;
+}
+
+/* ── Status bar ─────────────────────────────────────────────────────── */
+
+StatusBar {
+    dock: bottom;
+    height: 1;
+}
+
+/* ── Process detail ─────────────────────────────────────────────────── */
+
+#detail-body {
+    padding: 1 2;
+}
+
+#detail-title {
+    height: auto;
+    margin: 0 0 1 0;
+    padding: 0 1;
+    color: $coral;
+    text-style: bold;
+}
+
+.overview-grid {
+    layout: grid;
+    grid-size: 4;
+    grid-columns: 1fr 1fr;
+    grid-rows: auto;
+    grid-gutter: 0 2;
+    height: auto;
+    margin: 0 0 1 0;
+}
+
+.metric {
+    height: 3;
+    padding: 0 1;
+    border-left: thick $purple;
+    background: $surface-alt;
+    margin: 0 1 1 1;
+}
+
+.metric .metric-label {
+    color: $muted;
+}
+
+.metric .metric-value {
+    color: $cotton;
+    text-style: bold;
+}
+
+.metric .metric-unavailable {
+    color: $muted;
+    text-style: italic;
+}
+
+#command-line {
+    height: auto;
+    max-height: 8;
+    padding: 1 2;
+    margin: 0 0 1 0;
+    border: round $caramel;
+    background: $surface-alt;
+    color: $cotton;
+}
+
+#collection-note {
+    height: auto;
+    padding: 0 1;
+    margin: 0 0 1 0;
+    border-left: thick $amber;
+    color: $amber;
+}
+
+#collection-note.-error {
+    border-left: thick $coral;
+    color: $coral;
+}
+
+/* ── Loading ────────────────────────────────────────────────────────── */
+
+LoadingIndicator {
+    background: $surface;
+}
+
+.loading-row {
+    height: 1;
+    padding: 0 2;
+    color: $purple;
+}
+
+/* ── Empty / error states ───────────────────────────────────────────── */
+
+.empty-state {
+    height: 1fr;
+    content-align: center middle;
+    padding: 2 4;
+}
+
+.empty-state .empty-title {
+    color: $coral;
+    text-style: bold;
+}
+
+.empty-state .empty-body {
+    color: $muted;
+}
+
+.empty-state .empty-hint {
+    color: $purple;
+}
+
+/* ── Detail card (single resource) ──────────────────────────────────── */
+
+#resource-detail {
+    height: 1fr;
+    border: round $purple;
+    background: $surface-alt;
+    margin: 0 2 1 2;
+    padding: 1 2;
+    overflow-y: auto;
+}
+
+#resource-detail .detail-row {
+    height: auto;
+}
+
+#resource-detail .detail-key {
+    color: $purple;
+    text-style: bold;
+}
+
+#resource-detail .detail-value {
+    color: $cotton;
+}
+
+/* ── Tabs / categories ──────────────────────────────────────────────── */
+
+TabbedContent {
+    height: 1fr;
+}
+
+Tabs {
+    background: $surface-alt;
+}
+
+Tab {
+    color: $muted;
+}
+
+Tab.-active {
+    color: $coral;
+    text-style: bold;
+}
+
+Underline > .underline--bar {
+    color: $coral;
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────── */
+
+Footer {
+    background: $surface-alt;
+}
+
+Footer > .footer-key--key {
+    background: $purple;
+    color: $surface;
+}
+
+Footer > .footer-key--description {
+    background: $surface-raised;
+    color: $cotton;
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────────
+   Textual's TCSS has no @media support, so the app toggles the classes below
+   from on_resize handlers in screens/common.py:ResponsiveMixin.
+   Breakpoints: -compact below 100 columns, -narrow below 76 columns.        */
+
+.-compact #header-subtitle {
+    display: none;
+}
+
+.-compact .overview-grid {
+    grid-size: 2;
+}
+
+.-narrow #breadcrumb {
+    display: none;
+}
+
+.-narrow .overview-grid {
+    grid-size: 1;
+}
+
+.-narrow #detail-body {
+    padding: 0 1;
+}
+
+.-narrow #back-button {
+    min-width: 4;
+}
+
+.-narrow StatusBar #status-keys {
+    display: none;
+}
+
+.-compact ProcessListScreen #process-grid,
+.-narrow ProcessListScreen #process-grid {
+    scrollbar-size-vertical: 1;
+}
