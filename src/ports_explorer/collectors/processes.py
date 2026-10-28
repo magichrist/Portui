@@ -68,18 +68,14 @@ def process_to_record(
         user = _safe(process.username)
         cpu = _safe(process.cpu_percent) if cpu_percent is _READ_CPU else cpu_percent
         mem = _safe(process.memory_percent)
-        rss = _safe(process.memory_info)
+        meminfo = _safe(process.memory_info)
         threads = _safe(process.num_threads)
         status = _safe(process.status)
         created = _safe(process.create_time)
         exe = _safe(process.exe)
         cmdline = _safe(process.cmdline) if include_cmdline else None
 
-    rss_bytes = None
-    meminfo_detail: Any = None
-    if rss is not None:
-        meminfo_detail = _safe(process.memory_info)
-        rss_bytes = getattr(meminfo_detail, "rss", None)
+    rss_bytes = getattr(meminfo, "rss", None) if meminfo is not None else None
 
     elapsed = None
     if created is not None:
@@ -163,7 +159,9 @@ class ProcessCollector:
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, OSError):
                 continue
             except Exception:
-                log.debug("skipping unreadable process %s", process.pid, exc_info=True)
+                # psutil races (NoSuchProcess/AccessDenied/Zombie) are expected
+                # and handled above; anything else is a bug we must not bury.
+                log.warning("unexpected error collecting process %s", process.pid, exc_info=True)
         records.sort(key=lambda record: record.pid)
         return records
 
