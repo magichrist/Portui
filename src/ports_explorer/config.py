@@ -9,7 +9,6 @@ from pathlib import Path
 
 __all__ = [
     "PALETTES",
-    "THEME",
     "Settings",
     "Theme",
     "ThemeCatalog",
@@ -49,7 +48,6 @@ class Theme:
     surface_raised: str
     muted: str
     danger: str
-    dark: bool = True
 
     def tokens(self) -> dict[str, str]:
         """CSS variable name to hex value."""
@@ -220,7 +218,6 @@ DAYLIGHT = Theme(
     surface_raised="#E2DCE8",
     muted="#6B6478",
     danger="#C62828",
-    dark=False,
 )
 
 
@@ -279,12 +276,6 @@ class ThemeCatalog:
 CATALOG = ThemeCatalog()
 
 
-def __getattr__(name: str) -> Theme:
-    if name in PALETTES:
-        return CATALOG.set(name) or CATALOG.active
-    raise AttributeError(name)
-
-
 def set_theme(name: str) -> Theme | None:
     return CATALOG.set(name)
 
@@ -299,9 +290,6 @@ def current_theme() -> Theme:
 
 def theme_names() -> list[str]:
     return CATALOG.names
-
-
-THEME = CATALOG.active
 
 
 def with_tokens(css: str) -> str:
@@ -341,12 +329,12 @@ def build_settings(
 ) -> Settings:
     """Create and install a new settings instance (used by the CLI entry point)."""
     global _SETTINGS
-    path: Path | None
-    if log_file is None:
-        default = Path.home() / ".cache" / "ports-explorer" / "debug.log"
-        path = default if debug else None
+    if log_file is not None:
+        path: Path | None = Path(log_file)
     else:
-        path = Path(log_file)
+        # Same source of truth as the CLI help text: default_log_path honours
+        # XDG_CACHE_HOME, so don't hardcode a second derivation here.
+        path = default_log_path() if debug else None
     CATALOG.set(theme)
     _SETTINGS = Settings(
         debug=debug,
