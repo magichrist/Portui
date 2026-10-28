@@ -9,6 +9,3 @@ dist/
 .coverage
 htmlcov/
 .DS_Store
-port-ps.sh
-.venv/
-.venv
