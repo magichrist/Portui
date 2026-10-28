@@ -4,7 +4,6 @@
 
 ### *find out what's listening, who owns it, and what it has open*
 
-<a href="https://pypi.org/project/ports-explorer/"><img alt="pypi" src="https://img.shields.io/badge/pypi-FF5C8A?style=flat-square&labelColor=140F1B"></a>
 <a href="https://www.python.org/"><img alt="python" src="https://img.shields.io/badge/python-3.12%2B-B983FF?style=flat-square&labelColor=140F1B"></a>
 <a href="https://textual.textualize.io/"><img alt="textual" src="https://img.shields.io/badge/built%20with-Textual-4ECDC4?style=flat-square&labelColor=140F1B"></a>
 <a href="#license"><img alt="license" src="https://img.shields.io/badge/license-MIT-6BCB77?style=flat-square&labelColor=140F1B"></a>
@@ -47,7 +46,7 @@ Requires **Python 3.12+** and macOS `lsof`.
 
 ```bash
 brew install lsof
-git clone https://github.com/you/ports-explorer
+git clone <your-fork-or-this-repository>
 cd ports-explorer
 python3 -m pip install -e .
 ```
@@ -78,8 +77,8 @@ No `gum`. No `fzf`. No touching your `.zshrc`.
 
 ### ♡ Features
 
-- **Process browser** — every visible process with PID, PPID, user, CPU, memory, runtime, status and full path. Search any of it, including the complete command line. Sortable, refreshable, and your selection survives a refresh.
-- **Six resource views** — network connections, TCP listeners, files, UNIX sockets, and all open descriptors.
+- **Process browser** — every visible process with PID, PPID, user, CPU, memory, runtime, status and full path. Search any of it, including the complete command line. Refreshable, and your selection survives a refresh.
+- **Six focus views** — Overview, plus network connections, TCP listeners, files, UNIX sockets, and all open descriptors.
 - **Field-scoped search** — `port=8080`, `state=LISTEN`, `proto=UDP`, `rport=443`, `lip=127.0.0.1`, `fd=10`, or just words. Quote phrases for paths with spaces.
 - **Responsive** — the table sheds low-priority columns and the metric grid reflows as your terminal narrows.
 - **Six themes** — candy-bright or properly moody, switchable live with `Ctrl+T`.
@@ -139,6 +138,7 @@ This is the part we actually care about.
 
 | Flag | Does |
 |:--|:--|
+| `--version` | Show the version and exit |
 | `--refresh SECONDS` | Auto-update interval (default `2`). `0` starts paused. |
 | `--timeout SECONDS` | Timeout for one `lsof` run (default `20`) |
 | `--theme NAME` | Start with a specific palette |
@@ -308,7 +308,7 @@ src/ports_explorer/
     theme_picker.py      Live palette switcher
     common.py            Header, banner, responsive + auto-update + kill mixins
   widgets/
-    resource_table.py    Reusable sortable, filterable resource table
+    resource_table.py    Reusable filterable resource table
     status_bar.py        Counts, health badge, contextual key hints
   styles/app.tcss        The visual system
 ```
@@ -318,9 +318,11 @@ src/ports_explorer/
 **`lsof` is the authoritative source for files, descriptors and socket state**,
 because macOS permission rules routinely prevent full connection enumeration
 through `psutil`. It's always invoked as an argument array — never through a
-shell — with structured field output (`-FpcfntPTDismlug`) rather than a
-whitespace-aligned table. stdout and stderr are captured separately so a
-permission warning is reported as *data* instead of being mixed into results.
+shell — with structured field output (`-FpcLugkftaPnTDis`: PID, command, login
+name, UID, PGID, descriptor, type, access mode, protocol, name, TCP state,
+device, inode, size, link count) rather than a whitespace-aligned table.
+stdout and stderr are captured separately so a permission warning is reported
+as *data* instead of being mixed into results.
 
 **Socket state arrives as `TST=ESTABLISHED`, but the `T` field also carries
 unrelated queue counters** (`TQR=0`, `TQS=0`). Only the `ST` sub-field is
@@ -389,7 +391,10 @@ terminate path really works rather than just returning a cheerful message.
   `local->remote`, and IPv4-mapped IPv6. When a value can't be normalised the raw
   `lsof` string is always preserved and shown, and the resource is flagged as raw
   rather than dropped.
-- **File mode and size** appear only when `lsof` reports them; otherwise *unavailable*.
+- **File access mode, link count and size** appear only when `lsof` reports them;
+  otherwise *unavailable*. (The `ACCESS` column is lsof's access mode — `r`, `w`,
+  `u` — read from the `a` field, not the filesystem permission bits, which `lsof`
+  field output does not provide.)
 - **Environment variables are never read.** They commonly contain secrets.
 - **Responsive layout is width-based.** Textual's TCSS has no `@media` support, so
   breakpoints are applied by toggling classes from resize handlers.
