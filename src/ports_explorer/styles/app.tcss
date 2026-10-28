@@ -40,24 +40,11 @@ Screen {
     content-align: left middle;
 }
 
-#header-title .brand {
-    color: $coral;
-    text-style: bold;
-}
-
-#header-title .tagline {
-    color: $muted;
-}
-
 #header-subtitle {
     width: auto;
     padding: 0 2;
     content-align: right middle;
     color: $muted;
-}
-
-#header-subtitle .accent {
-    color: $purple;
 }
 
 /* ── Banner (breadcrumb + back button) ──────────────────────────────── */
@@ -96,23 +83,9 @@ Screen {
     content-align: left middle;
 }
 
-#breadcrumb .sep {
-    color: $caramel;
-}
+/* ── Search ─────────────────────────────────────────────────────────── */
 
-#breadcrumb .current {
-    color: $cotton;
-    text-style: bold;
-}
-
-/* ── Search row ─────────────────────────────────────────────────────── */
-
-#search-row {
-    height: 3;
-    padding: 0 1;
-}
-
-#process-search, #resource-search {
+#process-search {
     width: 1fr;
 }
 
@@ -170,48 +143,12 @@ StatusBar {
 
 /* ── Process detail ─────────────────────────────────────────────────── */
 
-#detail-body {
-    padding: 1 2;
-}
-
 #detail-title {
     height: auto;
     margin: 0 0 1 0;
     padding: 0 1;
     color: $coral;
     text-style: bold;
-}
-
-.overview-grid {
-    layout: grid;
-    grid-size: 4;
-    grid-columns: 1fr 1fr;
-    grid-rows: auto;
-    grid-gutter: 0 2;
-    height: auto;
-    margin: 0 0 1 0;
-}
-
-.metric {
-    height: 3;
-    padding: 0 1;
-    border-left: thick $purple;
-    background: $surface-alt;
-    margin: 0 1 1 1;
-}
-
-.metric .metric-label {
-    color: $muted;
-}
-
-.metric .metric-value {
-    color: $cotton;
-    text-style: bold;
-}
-
-.metric .metric-unavailable {
-    color: $muted;
-    text-style: italic;
 }
 
 #command-line {
@@ -237,37 +174,12 @@ StatusBar {
     color: $coral;
 }
 
-/* ── Loading ────────────────────────────────────────────────────────── */
-
-LoadingIndicator {
-    background: $surface;
-}
-
-.loading-row {
-    height: 1;
-    padding: 0 2;
-    color: $purple;
-}
-
 /* ── Empty / error states ───────────────────────────────────────────── */
 
 .empty-state {
     height: 1fr;
     content-align: center middle;
     padding: 2 4;
-}
-
-.empty-state .empty-title {
-    color: $coral;
-    text-style: bold;
-}
-
-.empty-state .empty-body {
-    color: $muted;
-}
-
-.empty-state .empty-hint {
-    color: $purple;
 }
 
 /* ── Detail card (single resource) ──────────────────────────────────── */
@@ -279,19 +191,6 @@ LoadingIndicator {
     margin: 0 2 1 2;
     padding: 1 2;
     overflow-y: auto;
-}
-
-#resource-detail .detail-row {
-    height: auto;
-}
-
-#resource-detail .detail-key {
-    color: $purple;
-    text-style: bold;
-}
-
-#resource-detail .detail-value {
-    color: $cotton;
 }
 
 /* ── Tabs / categories ──────────────────────────────────────────────── */
@@ -335,27 +234,16 @@ Footer > .footer-key--description {
 
 /* ── Responsive ──────────────────────────────────────────────────────────
    Textual's TCSS has no @media support, so the app toggles the classes below
-   from on_resize handlers in screens/common.py:ResponsiveMixin.
-   Breakpoints: -compact below 100 columns, -narrow below 76 columns.        */
+   from on_resize handlers in screens/common.py:ResponsiveMixin. The metric
+   grid handles -compact / -narrow in its own DEFAULT_CSS. Breakpoints:
+   -compact below 100 columns, -narrow below 76 columns.                    */
 
 .-compact #header-subtitle {
     display: none;
 }
 
-.-compact .overview-grid {
-    grid-size: 2;
-}
-
 .-narrow #breadcrumb {
     display: none;
-}
-
-.-narrow .overview-grid {
-    grid-size: 1;
-}
-
-.-narrow #detail-body {
-    padding: 0 1;
 }
 
 .-narrow #back-button {
