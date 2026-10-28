@@ -211,7 +211,7 @@ def test_pipe_and_directory_and_chr(states_output: str) -> None:
 def test_file_path_with_spaces_is_preserved_whole(states_output: str) -> None:
     records, _ = parse_lsof_output(states_output)
     directory = next(r for r in records if r.resource_type == "DIR")
-    assert directory.name == "/Users/alitabeee/Some Folder/with spaces"
+    assert directory.name == "/Users/dev/Some Folder/with spaces"
     assert " " in directory.name
 
 
@@ -223,16 +223,21 @@ def test_file_path_with_spaces_multiple_files(mixed_output: str) -> None:
 
 
 def test_metadata_fields_are_captured() -> None:
-    output = "p1\ncx\nf0\ntREG\nD0x100000e\ns224\ni126673821\nm0100644\nl3\nu501\ng20\nn/tmp/x\n"
+    # Field order mirrors what a real ``lsof -FpcLugkftaPnTDis`` emits: the
+    # process-level tags (p/c/u/L/g) come first, then per-descriptor records.
+    output = (
+        "p123\ncx\nu501\nLalice\ng20\nf0\ntREG\nar\nD0x100000e\ns224\ni126673821\nk3\nn/tmp/x\n"
+    )
     records, _ = parse_lsof_output(output)
     record = records[0]
+    assert record.user == "alice"
+    assert record.uid == 501
+    assert record.pgid == 20
     assert record.device == "0x100000e"
     assert record.size == 224
     assert record.inode == 126673821
-    assert record.mode == "0100644"
+    assert record.mode == "r"
     assert record.link_count == 3
-    assert record.uid == 501
-    assert record.gid == 20
 
 
 @pytest.mark.parametrize(
