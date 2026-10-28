@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -109,8 +110,9 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if args.no_color:
-        import os
-
+        # NO_COLOR is the standard signal. TEXTUAL_COLOR_SYSTEM is Textual's own
+        # runtime override (see textual/constants.py) — "none" stops the App
+        # from even probing the terminal for a color system.
         os.environ["NO_COLOR"] = "1"
         os.environ["TEXTUAL_COLOR_SYSTEM"] = "none"
 
