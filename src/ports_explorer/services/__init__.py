@@ -1,4 +1,4 @@
-"""Service package: pure logic with no I/O and no UI dependencies."""
+"""Service package: pure logic with no UI dependencies."""
 
 from .deduplication import (
     DeduplicationStats,
@@ -10,6 +10,16 @@ from .deduplication import (
     filter_network,
     filter_unix,
 )
+from .kill_process import (
+    GRACE_PERIOD,
+    KillOutcome,
+    KillRefused,
+    KillResult,
+    force_kill,
+    is_alive,
+    terminate,
+    validate_target,
+)
 from .resource_search import (
     ResourceFilter,
     filter_resources,
@@ -18,7 +28,11 @@ from .resource_search import (
 )
 
 __all__ = [
+    "GRACE_PERIOD",
     "DeduplicationStats",
+    "KillOutcome",
+    "KillRefused",
+    "KillResult",
     "ResourceFilter",
     "dedup_key",
     "deduplicate",
@@ -28,6 +42,10 @@ __all__ = [
     "filter_network",
     "filter_resources",
     "filter_unix",
+    "force_kill",
+    "is_alive",
     "search_processes",
     "search_resources",
+    "terminate",
+    "validate_target",
 ]
