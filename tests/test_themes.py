@@ -133,9 +133,31 @@ def test_themes_expose_a_state_color() -> None:
         assert theme.state_color("-") == theme.muted
 
 
-def test_dark_and_light_both_exist() -> None:
-    assert any(theme.dark for theme in PALETTES.values())
-    assert any(not theme.dark for theme in PALETTES.values())
+def test_every_theme_defines_every_token() -> None:
+    required = {
+        "coral",
+        "orange",
+        "amber",
+        "yellow",
+        "lime",
+        "cyan",
+        "blue",
+        "purple",
+        "grape",
+        "mint",
+        "caramel",
+        "cotton",
+        "surface",
+        "surface_alt",
+        "surface_raised",
+        "muted",
+        "danger",
+    }
+    for name, theme in PALETTES.items():
+        for token in required:
+            value = getattr(theme, token)
+            assert value, f"{name}.{token} is empty"
+            assert value.startswith("#") and len(value) in (4, 7), value
 
 
 def test_theme_catalog_names_are_stable() -> None:
