@@ -589,19 +589,12 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
 
     @on(DataTable.RowSelected, "#resource-grid")
     def _on_resource_selected(self, event: DataTable.RowSelected) -> None:
-        event.stop()
-        table = self._active_table()
-        if table is None:
-            return
-        record = table.selected_record()
-        if record is None:
-            return
-        self.app.push_resource_detail(record, self.process, self)
+        """Enter inside a focused table opens the selected resource handling.
 
-    def action_open_resource(self) -> None:
-        """Enter inside a category table opens the selected resource."""
-        if not isinstance(self.focused, DataTable):
-            return
+        ``RowSelected`` covers both plain Enter and double-click, so there is no
+        separate key action required.
+        """
+        event.stop()
         table = self._active_table()
         if table is None:
             return
