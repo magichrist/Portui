@@ -51,6 +51,13 @@ class KillOutcome(enum.StrEnum):
     TERMINATED = "terminated"
     """The process is gone."""
 
+    SENT = "sent"
+    """The signal was delivered; the caller must now wait and re-check liveness.
+
+    This is an internal handoff value: ``terminate``/``force_kill`` consume it
+    and answer with the final outcome, so it never reaches the user directly.
+    """
+
     IGNORED = "ignored"
     """Still alive after SIGTERM; a hard kill may be needed."""
 
@@ -100,15 +107,17 @@ def validate_target(pid: int, *, self_pid: int | None = None) -> None:
 def is_alive(pid: int) -> bool:
     """True only if the PID exists and has not become a zombie."""
     try:
-        return psutil.Process(pid).is_running() and psutil.Process(pid).status() != (
-            psutil.STATUS_ZOMBIE
-        )
+        # One handle for both reads: constructing two Process objects around a
+        # potential exit is a race, and a fresh handle loses nothing anyway.
+        process = psutil.Process(pid)
+        return process.is_running() and process.status() != psutil.STATUS_ZOMBIE
     except psutil.NoSuchProcess:
         return False
     except psutil.AccessDenied:
         # It exists; we simply are not allowed to look closely.
         return True
     except Exception:
+        log.debug("liveness check failed for PID %s", pid, exc_info=True)
         return False
 
 
@@ -152,8 +161,8 @@ def _signal(pid: int, sig: int, *, self_pid: int | None = None) -> KillResult:
         return KillResult(KillOutcome.ERROR, f"Could not signal PID {pid}: {exc}", pid, sig)
 
     return KillResult(
-        KillOutcome.IGNORED,
-        f"SIGTERM sent to PID {pid}; waiting to see whether it exits.",
+        KillOutcome.SENT,
+        f"{signal.Signals(sig).name} was delivered to PID {pid}; waiting to see whether it exits.",
         pid,
         signal_number=sig,
     )
@@ -173,7 +182,7 @@ async def terminate(
     the caller that a hard kill is the only remaining option.
     """
     sent = _signal(pid, signal.SIGTERM, self_pid=self_pid)
-    if sent.outcome is not KillOutcome.IGNORED:
+    if sent.outcome is not KillOutcome.SENT:
         return sent
 
     deadline = time.monotonic() + grace_period
@@ -208,7 +217,7 @@ async def force_kill(
     only reaching this after a SIGTERM was ignored.
     """
     sent = _signal(pid, signal.SIGKILL, self_pid=self_pid)
-    if sent.outcome is not KillOutcome.IGNORED:
+    if sent.outcome is not KillOutcome.SENT:
         return sent
 
     deadline = time.monotonic() + wait
