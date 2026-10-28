@@ -331,11 +331,11 @@ class ResourceDetailScreen(ResponsiveMixin, Screen[None]):
         if record.size is not None:
             rows.append(("SIZE", str(record.size), current_theme().muted))
         if record.mode:
-            rows.append(("MODE", record.mode, current_theme().muted))
+            rows.append(("ACCESS", record.mode, current_theme().muted))
         if record.uid is not None:
             rows.append(("UID", str(record.uid), current_theme().muted))
-        if record.gid is not None:
-            rows.append(("GID", str(record.gid), current_theme().muted))
+        if record.pgid is not None:
+            rows.append(("PGID", str(record.pgid), current_theme().muted))
 
         if record.aliases:
             rows.append(("ALSO VISIBLE VIA", ", ".join(record.aliases), current_theme().amber))
