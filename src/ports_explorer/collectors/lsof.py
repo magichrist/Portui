@@ -40,7 +40,21 @@ log = logging.getLogger(__name__)
 __all__ = ["FIELD_ARGUMENT", "LsofCollector", "LsofFieldParser", "parse_lsof_output"]
 
 
-FIELD_ARGUMENT = "pcfntPTDismlug"
+# The lsof -F alphabet we request. Verified against the macOS binary's
+# ``-F?`` listing; every letter is consumed by the parser below.
+#
+# Process level (emitted once per process record, before the first ``f``):
+#   p PID · c command name · L login name · u UID · g process group ID (PGID)
+# File level (emitted per descriptor):
+#   f file descriptor · t type · a access mode (r/w/u) · P protocol name ·
+#   n name/Internet address · T TCP/TPI info (only ST sub-field read) ·
+#   D major/minor device · i inode · s size · k link count
+#
+# Deliberately NOT requested:
+#   ``l`` (lock status — letters like r/w/R/W, not a count),
+#   ``m`` (a marker for ``-r`` repeater mode, which we never use),
+#   ``o`` (offset), ``d``/``r`` (device codes superseded by ``D``).
+FIELD_ARGUMENT = "pcLugkftaPnTDis"
 
 
 _UNAVAILABLE = "-"
@@ -64,8 +78,6 @@ class _FileState:
     size: int | None = None
     mode: str | None = None
     link_count: int | None = None
-    uid: int | None = None
-    gid: int | None = None
     issues: list[ParseIssue] = field(default_factory=list)
 
 
@@ -74,6 +86,8 @@ class _ProcessState:
     pid: int = 0
     command: str = ""
     user: str = ""
+    uid: int | None = None
+    pgid: int | None = None
 
 
 class LsofFieldParser:
@@ -111,9 +125,7 @@ class LsofFieldParser:
         if current.protocol in ("TCP", "UDP") and not current.state:
             current.issues.append(ParseIssue.MISSING_STATE)
 
-        local, remote, endpoint_issue = _parse_socket_name(current.name)
-        if endpoint_issue is not None:
-            current.issues.append(endpoint_issue)
+        local, remote = _parse_socket_name(current.name)
 
         self._records.append(
             ResourceRecord(
@@ -132,8 +144,8 @@ class LsofFieldParser:
                 size=current.size,
                 mode=current.mode,
                 link_count=current.link_count,
-                uid=current.uid,
-                gid=current.gid,
+                uid=self._process.uid,
+                pgid=self._process.pgid,
                 issues=tuple(dict.fromkeys(current.issues)),
                 raw_name=current.name,
             )
@@ -176,6 +188,17 @@ class LsofFieldParser:
             self._file = _FileState(fd=value.strip())
             return
 
+        # L (login name), u (UID) and g (PGID) are process-level fields: lsof
+        # emits them once per process set, typically before the first ``f`` tag.
+        # They belong to the process state, never to a single descriptor.
+        if tag == "L":
+            self._process.user = value.strip()
+            return
+        if tag in ("u", "g"):
+            target = "uid" if tag == "u" else "pgid"
+            setattr(self._process, target, int(value) if value.strip().isdigit() else None)
+            return
+
         if self._file is None:
             return
 
@@ -183,6 +206,10 @@ class LsofFieldParser:
         match tag:
             case "t":
                 current.resource_type = value.strip()
+            case "a":
+                current.mode = value.strip() or None
+            case "k":
+                current.link_count = int(value) if value.strip().isdigit() else None
             case "P":
                 current.protocol = value.strip()
             case "n":
@@ -197,14 +224,6 @@ class LsofFieldParser:
                 current.inode = int(value) if value.strip().isdigit() else None
             case "s":
                 current.size = int(value) if value.strip().isdigit() else None
-            case "m":
-                current.mode = value.strip()
-            case "l":
-                current.link_count = int(value) if value.strip().isdigit() else None
-            case "u":
-                current.uid = int(value) if value.strip().isdigit() else None
-            case "g":
-                current.gid = int(value) if value.strip().isdigit() else None
             case _:
                 pass
 
@@ -226,7 +245,7 @@ class LsofFieldParser:
         return self._issues
 
 
-def _parse_socket_name(name: str) -> tuple[Endpoint, Endpoint, ParseIssue | None]:
+def _parse_socket_name(name: str) -> tuple[Endpoint, Endpoint]:
     """Split an ``lsof`` NAME field into local and remote endpoints.
 
     Recognised shapes::
@@ -236,17 +255,21 @@ def _parse_socket_name(name: str) -> tuple[Endpoint, Endpoint, ParseIssue | None
         240.0.0.2:64277->139.162.187.236:123    local -> remote
         [::1]:443                               bracketed IPv6
         [::1]:443->[::2]:52000                  bracketed IPv6 both ends
+
+    Anything the splitter cannot normalise keeps its raw value in
+    ``ResourceRecord.raw_name``, which the UI always displays, so no value is
+    dropped here.
     """
     if not name:
-        return Endpoint(None, None), Endpoint(None, None), None
+        return Endpoint(None, None), Endpoint(None, None)
 
     if "->" not in name:
-        return split_endpoint(name), Endpoint(None, None), None
+        return split_endpoint(name), Endpoint(None, None)
 
     left, _, right = name.partition("->")
     local = split_endpoint(left.strip())
     remote = split_endpoint(right.strip())
-    return local, remote, None
+    return local, remote
 
 
 def parse_lsof_output(
@@ -408,13 +431,26 @@ async def _resolve_user(pid: int | None) -> tuple[str, bool]:
 
 
 def _resolve_user_blocking(pid: int) -> tuple[str, bool]:
+    """Best-effort ``(username, is_alive)`` for the inspected process.
+
+    The two answers are independent: ``AccessDenied`` proves the process is
+    alive even though we cannot peek at it, and only ``NoSuchProcess`` means it
+    is gone. An absent ``psutil`` must not be read as "process exited" — treat
+    the process as alive and let the lsof stderr alone drive the verdict.
+    """
     try:
         import psutil
 
         process = psutil.Process(pid)
         username = process.username() or ""
-    except Exception:
+    except ImportError:  # psutil not installed; liveness unknown — assume alive.
+        return "", True
+    except psutil.NoSuchProcess:
         return "", False
+    except psutil.AccessDenied as exc:
+        # It exists and belongs to another user.
+        log.debug("cannot read username of PID %s: %s", pid, exc)
+        return "", True
     return username, True
 
 
