@@ -11,7 +11,7 @@ from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.screen import Screen
-from textual.widgets import DataTable, Input, Static
+from textual.widgets import DataTable, Input
 
 from ..collectors.processes import ProcessCollector
 from ..config import current_theme, get_settings, with_tokens
@@ -88,7 +88,6 @@ class ProcessListScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[None
 
     def compose(self) -> ComposeResult:
         yield AppHeader(id="app-header")
-        yield Static("", id="search-row")
         with Horizontal(id="process-search-row"):
             yield Input(
                 placeholder="Search name, PID, user, path or command…",
