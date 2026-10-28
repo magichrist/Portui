@@ -2,7 +2,7 @@ p10901
 czsh
 fcwd
 tDIR
-n/Users/alitabeee/PycharmProjects/Projects/Porter
+n/Users/dev/PycharmProjects/Projects/Porter
 ftxt
 tREG
 n/bin/zsh
@@ -68,7 +68,7 @@ tPIPE
 nPIPE
 f14
 tREG
-n/Users/alitabeee/My Projects/data with spaces/file.txt
+n/Users/dev/My Projects/data with spaces/file.txt
 f15
 tREG
-n/Users/alitabeee/My Projects/data with spaces/other file.txt
+n/Users/dev/My Projects/data with spaces/other file.txt
