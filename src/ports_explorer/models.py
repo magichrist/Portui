@@ -117,7 +117,6 @@ class ParseIssue(enum.StrEnum):
     """Recoverable parsing problems surfaced in the UI instead of being swallowed."""
 
     MISSING_STATE = "missing-state"
-    UNPARSED_ENDPOINT = "unparsed-endpoint"
     TRUNCATED_RECORD = "truncated-record"
     UNKNOWN_TYPE = "unknown-type"
 
@@ -261,7 +260,7 @@ class ResourceRecord:
     mode: str | None = None
     link_count: int | None = None
     uid: int | None = None
-    gid: int | None = None
+    pgid: int | None = None
     issues: tuple[ParseIssue, ...] = ()
     raw_name: str = ""
     aliases: tuple[str, ...] = ()
