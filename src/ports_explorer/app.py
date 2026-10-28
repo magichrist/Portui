@@ -85,7 +85,6 @@ class PortsExplorerApp(App):
         if theme is None:
             return None
         self._theme_name = theme.name
-        self.set_class(not theme.dark, "-light-mode")
         self.refresh_css()
         self._refresh_visible_content()
         return theme
