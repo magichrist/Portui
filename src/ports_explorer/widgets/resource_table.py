@@ -14,8 +14,8 @@ from typing import Any
 
 from rich.text import Text
 from textual.app import ComposeResult
+from textual.message import Message
 from textual.widgets import DataTable, Input, Static
-from textual.widgets.data_table import RowKey
 
 from ..config import current_theme, with_tokens
 from ..models import ResourceCategory, ResourceRecord
@@ -36,7 +36,7 @@ NETWORK_COLUMNS: list[tuple[str, int]] = [
 FILE_COLUMNS: list[tuple[str, int]] = [
     ("FD", 8),
     ("TYPE", 8),
-    ("MODE", 10),
+    ("ACCESS", 10),
     ("RESOURCE", 64),
 ]
 
@@ -54,7 +54,7 @@ def _cell(text: str, style: str) -> Text:
 
 
 class ResourceTable(Static):
-    """Searchable, sortable table of open resources for one process."""
+    """Searchable, filterable table of open resources for one process."""
 
     DEFAULT_CSS = with_tokens("""
     ResourceTable {
@@ -300,8 +300,6 @@ class ResourceTable(Static):
         if event.data_table.id == "resource-grid":
             event.stop()
 
-    from textual.message import Message
-
     class RecordCountChanged(Message):
         """Bubble up so the parent screen can update its status line."""
 
@@ -309,7 +307,3 @@ class ResourceTable(Static):
             super().__init__()
             self.shown = shown
             self.total = total
-
-
-def make_row_key(record: ResourceRecord) -> RowKey:
-    return RowKey(str(id(record)))
