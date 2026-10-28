@@ -13,7 +13,7 @@ from textual.containers import Horizontal
 from textual.widgets import Button, Input, Static
 
 from ..config import current_theme, get_settings
-from ..services.kill_process import KillOutcome, KillResult, force_kill, terminate
+from ..services import KillOutcome, KillResult, force_kill, terminate
 from ..widgets.status_bar import StatusBar
 
 __all__ = [
@@ -24,7 +24,6 @@ __all__ = [
     "AutoUpdateMixin",
     "EmptyState",
     "KillMixin",
-    "LoadingRow",
     "ResponsiveMixin",
     "ScreenBanner",
 ]
@@ -286,6 +285,7 @@ class KillMixin:
         style = {
             KillOutcome.TERMINATED: "information",
             KillOutcome.NOT_FOUND: "information",
+            KillOutcome.SENT: "information",
             KillOutcome.PERMISSION_DENIED: "error",
             KillOutcome.REFUSED: "error",
             KillOutcome.ERROR: "error",
@@ -331,12 +331,9 @@ class AppHeader(Static):
         self.query_one("#header-title", Static).update(title)
         self.set_subtitle("inspection")
 
-    def set_subtitle(self, text: str, accent: str | None = None) -> None:
+    def set_subtitle(self, text: str) -> None:
         rendered = Text()
         rendered.append(text, style=current_theme().muted)
-        if accent:
-            rendered.append("  ")
-            rendered.append(accent, style=current_theme().purple)
         self.query_one("#header-subtitle", Static).update(rendered)
 
 
@@ -372,23 +369,6 @@ class ScreenBanner(Horizontal):
             rendered.append(crumb, style=style)
         with suppress(Exception):
             self.query_one("#breadcrumb", Static).update(rendered)
-
-
-class LoadingRow(Static):
-    """One-line spinner with a label, used while a worker runs."""
-
-    def __init__(self, label: str = "Collecting…", **kwargs: Any) -> None:
-        super().__init__(**kwargs)
-        self._label = label
-        super().update(self._build())
-
-    def _build(self) -> Text:
-        return Text(f"◌ {self._label}", style=current_theme().purple)
-
-    def set_label(self, label: str) -> None:
-        self._label = label
-        with suppress(Exception):
-            self.update(self._build())
 
 
 class EmptyState(Static):
