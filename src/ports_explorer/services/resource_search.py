@@ -8,14 +8,13 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from ..models import ProcessRecord, ResourceRecord
 
 __all__ = [
     "ResourceFilter",
     "filter_resources",
-    "matches_tokens",
     "search_processes",
     "search_resources",
     "tokenize",
@@ -59,11 +58,6 @@ def tokenize(query: str) -> list[str]:
         if match:
             tokens.append(match)
     return tokens
-
-
-def matches_tokens(blob: str, tokens: Sequence[str]) -> bool:
-    """All tokens must appear in the haystack (AND semantics, case-insensitive)."""
-    return all(token.lower() in blob for token in tokens if token)
 
 
 @dataclass(slots=True)
@@ -236,27 +230,3 @@ def search_processes(
         if all(token.lower() in blob for token in tokens):
             results.append(process)
     return results
-
-
-@dataclass(slots=True)
-class SearchOutcome:
-    """Result set plus the counts the UI needs to be honest about."""
-
-    query: str
-    matches: list[ResourceRecord] = field(default_factory=list)
-    total: int = 0
-
-    @property
-    def count(self) -> int:
-        return len(self.matches)
-
-    @property
-    def is_empty(self) -> bool:
-        return self.count == 0
-
-    def summary(self) -> str:
-        if not self.query.strip():
-            return f"{self.total} resources"
-        if self.count == 0:
-            return f"No matches for '{self.query}' in {self.total} resources"
-        return f"{self.count} of {self.total} resources match"
