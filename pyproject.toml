@@ -15,6 +15,7 @@ classifiers = [
     "Operating System :: MacOS :: MacOS X",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: System :: Monitoring",
     "Topic :: System :: Networking :: Monitoring",
 ]
@@ -23,10 +24,6 @@ dependencies = [
     "rich>=13.7",
     "psutil>=6.0",
 ]
-
-[project.urls]
-Homepage = "https://github.com/example/ports-explorer"
-Issues = "https://github.com/example/ports-explorer/issues"
 
 [project.scripts]
 ports-explorer = "ports_explorer.__main__:main"
