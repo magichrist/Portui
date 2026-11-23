@@ -19,6 +19,7 @@ from textual.widgets import DataTable, Input, Static
 
 from ..config import current_theme
 from ..models import ResourceCategory, ResourceRecord
+from ..screens.common import move_cursor_by
 from ..services.deduplication import dedup_key
 
 __all__ = ["ResourceTable"]
@@ -266,6 +267,22 @@ class ResourceTable(Static):
         if self.is_mounted:
             self._populate()
 
+    def on_key(self, event: Any) -> None:
+        # While the per-table filter has focus, ↑/↓ move the table highlight
+        # instead of the text caret — the user never has to leave the field.
+        focused = self.app.focused
+        if (
+            event.key in ("up", "down", "alt+up", "alt+down")
+            and isinstance(focused, Input)
+            and focused.id == "resource-filter"
+        ):
+            event.stop()
+            table = self.query_one("#resource-grid", DataTable)
+            step = 10 if event.key.startswith("alt+") else 1
+            if event.key.endswith("up"):
+                step = -step
+            move_cursor_by(table, step)
+
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "resource-filter":
             event.stop()
@@ -274,11 +291,23 @@ class ResourceTable(Static):
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id == "resource-filter":
             event.stop()
-            self.focus_table()
+            record = self.selected_record()
+            if record is not None:
+                # A RowSelected posted from inside an Input message is swallowed
+                # by Textual's pump; a semantic message bubbles normally and
+                # lets the screen decide what to open.
+                self.post_message(self.ResourceActivated(record))
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         if event.data_table.id == "resource-grid":
             event.stop()
+
+    class ResourceActivated(Message):
+        """Bubble up when Enter is pressed in the filter of an active table."""
+
+        def __init__(self, record: ResourceRecord) -> None:
+            super().__init__()
+            self.record = record
 
     class RecordCountChanged(Message):
         """Bubble up so the parent screen can update its status line."""
