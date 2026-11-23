@@ -19,7 +19,7 @@ from textual.widgets import DataTable, Input, Static
 
 from ..config import current_theme
 from ..models import ResourceCategory, ResourceRecord
-from ..screens.common import move_cursor_by
+from ..screens.common import jump_step, move_cursor_by
 from ..services.deduplication import dedup_key
 
 __all__ = ["ResourceTable"]
@@ -270,18 +270,21 @@ class ResourceTable(Static):
     def on_key(self, event: Any) -> None:
         # While the per-table filter has focus, ↑/↓ move the table highlight
         # instead of the text caret — the user never has to leave the field.
+        step = jump_step(event.key)
+        if step is not None:
+            event.stop()
+            table = self.query_one("#resource-grid", DataTable)
+            move_cursor_by(table, step)
+            return
         focused = self.app.focused
         if (
-            event.key in ("up", "down", "alt+up", "alt+down")
+            event.key in ("up", "down")
             and isinstance(focused, Input)
             and focused.id == "resource-filter"
         ):
             event.stop()
             table = self.query_one("#resource-grid", DataTable)
-            step = 10 if event.key.startswith("alt+") else 1
-            if event.key.endswith("up"):
-                step = -step
-            move_cursor_by(table, step)
+            move_cursor_by(table, 1 if event.key == "down" else -1)
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "resource-filter":
