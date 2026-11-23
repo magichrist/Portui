@@ -15,7 +15,7 @@ from textual.screen import Screen
 from textual.widgets import DataTable, Input
 
 from ..collectors.processes import ProcessCollector
-from ..config import current_theme, get_settings, with_tokens
+from ..config import current_theme, get_settings
 from ..models import ProcessRecord, format_bytes, format_percent
 from ..services.resource_search import search_processes
 from ..widgets.status_bar import StatusBar
@@ -58,25 +58,6 @@ class ProcessListScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[None
         ("backspace", "go_back", "Back"),
         ("question_mark", "show_help", "Help"),
     ]
-
-    DEFAULT_CSS = with_tokens("""
-    ProcessListScreen {
-        height: 1fr;
-    }
-    ProcessListScreen #process-search-row {
-        height: 3;
-        padding: 0 1;
-    }
-    ProcessListScreen.-narrow #process-grid {
-        scrollbar-size-vertical: 1;
-    }
-    ProcessListScreen #process-empty {
-        display: none;
-    }
-    ProcessListScreen.-empty #process-empty {
-        display: block;
-    }
-    """)
 
     def __init__(self, collector: ProcessCollector, **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -273,7 +254,7 @@ class ProcessListScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[None
         name_style = current_theme().cyan if process.is_system else current_theme().cotton
         return [
             Text(process.name, style=name_style),
-            Text(str(process.pid), style=current_theme().purple),
+            Text(str(process.pid), style=current_theme().accent),
             Text(
                 str(process.ppid) if process.ppid is not None else "—",
                 style=current_theme().caramel,
@@ -361,7 +342,10 @@ class ProcessListScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[None
             search.value = ""
             self._apply_query()
             return
-        self.app.pop_screen()
+        # This is the root screen. Textual keeps one base Screen at the bottom
+        # of the stack, so popping here would leave a blank, unusable app.
+        if len(self.app.screen_stack) > 2:
+            self.app.pop_screen()
 
     def action_quit_app(self) -> None:
         self.app.exit()
@@ -420,7 +404,7 @@ def _load_style(value: float | None, threshold: float) -> str:
     if value is None:
         return current_theme().muted
     if value >= threshold:
-        return current_theme().coral
+        return current_theme().danger
     if value >= threshold / 2:
         return current_theme().orange
     return current_theme().lime
