@@ -417,7 +417,13 @@ def _classify_permission(
     if not records:
         if not process_exists:
             return PermissionState.GONE
-        return PermissionState.DENIED
+        # Exit 1 with no rows and no stderr is how macOS lsof reports a live
+        # process it cannot read (the documented permission case). Exit 0 is
+        # different: lsof succeeded and honestly found no descriptors, so an
+        # empty inventory must not be dressed up as "permission denied".
+        if has_denial or return_code == 1:
+            return PermissionState.DENIED
+        return PermissionState.OK
     if return_code == 1:
         return PermissionState.PARTIAL
     return PermissionState.OK
@@ -443,6 +449,7 @@ def _resolve_user_blocking(pid: int) -> tuple[str, bool]:
 
         process = psutil.Process(pid)
         username = process.username() or ""
+        status = process.status()
     except ImportError:  # psutil not installed; liveness unknown — assume alive.
         return "", True
     except psutil.NoSuchProcess:
@@ -451,6 +458,11 @@ def _resolve_user_blocking(pid: int) -> tuple[str, bool]:
         # It exists and belongs to another user.
         log.debug("cannot read username of PID %s: %s", pid, exc)
         return "", True
+    except OSError:
+        return "", True
+    if status == psutil.STATUS_ZOMBIE:
+        # A zombie has already exited even though its PID lingers until reaped.
+        return "", False
     return username, True
 
 

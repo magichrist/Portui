@@ -18,8 +18,8 @@ from ..models import ProcessRecord, ResourceRecord
 from ..services.deduplication import deduplicate
 from ..services.resource_search import (
     ResourceFilter,
-    filter_resources,
     search_resources,
+    tokenize,
 )
 from ..widgets.status_bar import StatusBar
 from .common import AppHeader, EmptyState, ResponsiveMixin, ScreenBanner
@@ -37,7 +37,9 @@ def _filter_from_tokens(query: str) -> tuple[list[str], ResourceFilter]:
     """
     terms: list[str] = []
     criteria = ResourceFilter()
-    for token in query.split():
+    # Use the shared tokenizer so a quoted phrase stays a single term even when
+    # it contains spaces. ``query.split()`` used to break those apart.
+    for token in tokenize(query):
         if "=" not in token:
             terms.append(token)
             continue
@@ -147,9 +149,11 @@ class ResourceBrowserScreen(ResponsiveMixin, Screen[None]):
         search.focus()
 
     def _apply(self, query: str) -> None:
-        terms, criteria = _filter_from_tokens(query)
-        filtered = filter_resources(self.records, criteria)
-        self._shown = search_resources(filtered, " ".join(terms))
+        _, criteria = _filter_from_tokens(query)
+        # Pass the *original* query through: re-joining the extracted terms used
+        # to re-split a quoted path containing spaces. search_resources applies
+        # the structured criteria itself.
+        self._shown = search_resources(self.records, query, criteria=criteria)
 
         table = self.query_one("#browser-grid", DataTable)
         table.clear()

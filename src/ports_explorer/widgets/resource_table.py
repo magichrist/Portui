@@ -286,6 +286,11 @@ class ResourceTable(Static):
     def focus_table(self) -> None:
         self.query_one("#resource-grid", DataTable).focus()
 
+    def refresh_content(self) -> None:
+        """Repaint table cells whose inline styles were baked with an old palette."""
+        if self.is_mounted:
+            self._populate()
+
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "resource-filter":
             event.stop()

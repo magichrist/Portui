@@ -2,24 +2,12 @@
    Ports Explorer — design system
    Coral = emphasis, cyan = network, lime = healthy/established,
    amber = listening/warning, purple = navigation, muted = metadata.
-   ========================================================================== */
 
-$surface: #14121B;
-$surface-alt: #1E1B28;
-$surface-raised: #262233;
-$coral: #FF5C8A;
-$cyan: #4ECDC4;
-$lime: #6BCB77;
-$amber: #FF9F43;
-$yellow: #FFD93D;
-$purple: #B983FF;
-$blue: #4D96FF;
-$muted: #8A8496;
-$cotton: #F2EAE0;
-$caramel: #C08B4F;
-$grape: #8E6CC7;
-$mint: #4ECDC4;
-$danger: #FF5470;
+   Theme colors are supplied dynamically by App.get_css_variables(). Never
+   declare $token: #hex; here (or in with_tokens()): Textual appends CSS values
+   to the app variables, so a baked declaration would shadow the active palette
+   and make live theme switching impossible.
+   ========================================================================== */
 
 Screen {
     background: $surface;

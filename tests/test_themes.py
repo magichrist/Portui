@@ -86,10 +86,10 @@ def test_design_tokens_are_valid_tcss() -> None:
             assert value.strip().endswith(";")
 
 
-def test_with_tokens_prepends_the_active_palette() -> None:
-    block = with_tokens("X { color: red; }")
-    for token in ("$coral", "$surface", "$cotton"):
-        assert f"{token}:" in block
+def test_with_tokens_does_not_bake_palette_values() -> None:
+    """Widget CSS must not shadow the dynamic variables set by the app."""
+    css = "X { color: red; }"
+    assert with_tokens(css) == css
 
 
 def test_setting_an_unknown_theme_returns_none() -> None:

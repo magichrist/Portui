@@ -200,6 +200,11 @@ class KillMixin:
         self._kill_armed_pid = pid
         self._kill_stage = stage
         self._kill_deadline = time.monotonic() + ARM_TIMEOUT
+        # Actually disarm after the window instead of relying on the lazy check
+        # in _kill_expired() on the next keypress. The status hint then clears
+        # itself and the app is never left visibly armed past five seconds.
+        with suppress(Exception):
+            self._kill_timer = self.set_timer(ARM_TIMEOUT, self._disarm_kill)
         self._render_kill_hint()
         verb = "Force kill" if stage == "force" else "Terminate"
         self.notify(
@@ -325,11 +330,16 @@ class AppHeader(Static):
         yield Static("", id="header-subtitle")
 
     def on_mount(self) -> None:
-        title = Text()
-        title.append("◈ PORTS EXPLORER", style=f"bold {current_theme().coral}")
-        title.append("  ·  PROCESS · NETWORK · FILES", style=current_theme().muted)
-        self.query_one("#header-title", Static).update(title)
-        self.set_subtitle("inspection")
+        self.refresh_content()
+
+    def refresh_content(self) -> None:
+        """Repaint inline-styled text with the currently active palette."""
+        with suppress(Exception):
+            title = Text()
+            title.append("◈ PORTS EXPLORER", style=f"bold {current_theme().coral}")
+            title.append("  ·  PROCESS · NETWORK · FILES", style=current_theme().muted)
+            self.query_one("#header-title", Static).update(title)
+            self.set_subtitle("inspection")
 
     def set_subtitle(self, text: str) -> None:
         rendered = Text()
@@ -370,6 +380,10 @@ class ScreenBanner(Horizontal):
         with suppress(Exception):
             self.query_one("#breadcrumb", Static).update(rendered)
 
+    def refresh_content(self) -> None:
+        with suppress(Exception):
+            self.render_crumb(self._crumbs)
+
 
 class EmptyState(Static):
     """Centred empty/error state with a concrete hint, never a bare message."""
@@ -380,19 +394,23 @@ class EmptyState(Static):
         body: str = "",
         hint: str = "",
         *,
-        tone: str = current_theme().muted,
+        tone: str | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self._title = title
         self._body = body
         self._hint = hint
+        # Resolve the default at render time, not at import time — otherwise an
+        # EmptyState is stuck with the palette that happened to be active when
+        # this module was first imported.
         self._tone = tone
         super().update(self._build())
 
     def _build(self) -> Text:
         rendered = Text()
-        rendered.append(f"{self._title}\n", style=f"bold {self._tone}")
+        tone = self._tone or current_theme().muted
+        rendered.append(f"{self._title}\n", style=f"bold {tone}")
         if self._body:
             rendered.append(f"{self._body}\n", style=current_theme().muted)
         if self._hint:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from contextlib import suppress
@@ -183,6 +184,7 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
         ("k", "kill_process", "Terminate"),
         ("slash", "focus_search", "Search"),
         ("ctrl+f", "focus_search", "Search"),
+        ("s", "show_resource_search", "Search all"),
         ("escape", "go_back", "Back"),
         ("backspace", "go_back", "Back"),
         ("1", "show_tab('tab-overview')", "Overview"),
@@ -271,6 +273,20 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
     def _end_initialisation(self) -> None:
         self._initialising = False
 
+    def _display_counts(self) -> tuple[int, int, int]:
+        """Counts derived from the deduplicated rows the user actually sees.
+
+        ``CollectionResult.*_count`` counts raw lsof rows, which inflates numbers
+        when several descriptors point at the same socket. The overview and the
+        status bar must agree with the tables, so both use this helper.
+        """
+        rows = self._deduped
+        return (
+            sum(1 for record in rows if record.is_inet),
+            sum(1 for record in rows if record.is_listening),
+            sum(1 for record in rows if not record.is_inet),
+        )
+
     def render_overview(self) -> None:
         process = self.process
         self.query_one("#detail-title", Static).update(
@@ -278,6 +294,7 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
         )
 
         result = self._result
+        network, listening, other = self._display_counts()
         metrics: list[tuple[str, str | None, str]] = [
             ("PID", str(process.pid), current_theme().cotton),
             (
@@ -309,9 +326,9 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
                 current_theme().cotton,
             ),
             ("RUNTIME", process.elapsed, current_theme().muted),
-            ("UNIQUE NETWORK", str(result.network_count) if result else None, current_theme().cyan),
-            ("LISTENING", str(result.listener_count) if result else None, current_theme().orange),
-            ("OTHER RESOURCES", str(result.file_count) if result else None, current_theme().purple),
+            ("UNIQUE NETWORK", str(network) if result else None, current_theme().cyan),
+            ("LISTENING", str(listening) if result else None, current_theme().orange),
+            ("OTHER RESOURCES", str(other) if result else None, current_theme().purple),
         ]
 
         grid = self.query_one("#metric-grid", MetricGrid)
@@ -372,6 +389,12 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
 
         try:
             result = await self.lsof.collect(self.process.pid)
+        except asyncio.CancelledError:
+            # CancelledError is a BaseException: without this branch an exclusive
+            # worker superseded mid-collection would leave _collecting stuck True.
+            self._collecting = False
+            self._update_status()
+            raise
         except Exception as exc:
             log.exception("lsof collection failed")
             self._collecting = False
@@ -496,11 +519,8 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
         elif self._result is None:
             status.set_counts("No resources collected yet")
         else:
-            status.set_counts(
-                f"{self._result.network_count} network  ·  "
-                f"{self._result.listener_count} listening  ·  "
-                f"{self._result.file_count} other"
-            )
+            network, listening, other = self._display_counts()
+            status.set_counts(f"{network} network  ·  {listening} listening  ·  {other} other")
         status.set_keys(self._default_key_hints())
         if self._result is not None:
             status.set_collection(self._result)
@@ -536,6 +556,12 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
         table = self._active_table()
         if table is not None:
             table.toggle_search()
+
+    def action_show_resource_search(self) -> None:
+        """Open the dedicated search across every resource of this process."""
+        if self._result is None:
+            return
+        self.app.push_resource_search(self._result.records, self.process, self)
 
     def action_focus_table(self) -> None:
         table = self._active_table()

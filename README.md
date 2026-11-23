@@ -129,6 +129,7 @@ This is the part we actually care about.
 | `4` | Files and directories |
 | `5` | UNIX sockets |
 | `6` | All open descriptors |
+| `s` | Search all resources for this process |
 | `←` `→` | Cycle tabs |
 | `k` `k` | Terminate this process |
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import suppress
 from typing import Any, ClassVar
@@ -176,6 +177,13 @@ class ProcessListScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[None
         self._update_status()
         try:
             processes = await self.collector.snapshot()
+        except asyncio.CancelledError:
+            # A newer exclusive worker superseded this one. CancelledError is a
+            # BaseException, so ``except Exception`` would skip the reset and
+            # leave the status bar saying "Collecting…" until the next tick.
+            self._loading = False
+            self._update_status()
+            raise
         except Exception as exc:
             log.exception("process collection failed")
             self._loading = False

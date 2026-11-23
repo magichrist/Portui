@@ -21,7 +21,15 @@ __all__ = [
 ]
 
 
-_TERM = re.compile(r'"[^"]+"|\S+')
+# A token is either ``key=value`` (where the value may itself be a quoted
+# phrase with spaces), a standalone quoted phrase, or a bare word. Ordering
+# matters: the key=value alternative must be tried first so ``path="/a b"``
+# becomes one token instead of three.
+_TOKEN = re.compile(
+    r'(?P<key>[a-zA-Z]+)=(?P<value>"[^"]*"|\S+)'
+    r'|(?P<phrase>"[^"]*")'
+    r"|(?P<bare>\S+)"
+)
 _KV = re.compile(r"^(?P<key>[a-z]+)=(?P<value>.+)$", re.IGNORECASE)
 
 _SUPPORTED_KEYS = frozenset(
@@ -48,15 +56,25 @@ def tokenize(query: str) -> list[str]:
     """Split a query into tokens, honouring double-quoted phrases.
 
     Quotes are stripped from the returned tokens so a phrase matches the same
-    text a user sees in the table (a quoted path must not require the quotes to
-    be present in the haystack).
+    text a user sees in the table. Quoting a *field value* works too:
+    ``path="/Users/me/My Folder/file"`` is one token, not four.
     """
     tokens: list[str] = []
-    for match in _TERM.findall(query or ""):
-        if match.startswith('"') and match.endswith('"') and len(match) >= 2:
-            match = match[1:-1]
-        if match:
-            tokens.append(match)
+    for match in _TOKEN.finditer(query or ""):
+        if match.group("key") is not None:
+            value = match.group("value")
+            if len(value) >= 2 and value.startswith('"') and value.endswith('"'):
+                value = value[1:-1]
+            if value:
+                tokens.append(f"{match.group('key')}={value}")
+        elif match.group("phrase") is not None:
+            phrase = match.group("phrase")[1:-1]
+            if phrase:
+                tokens.append(phrase)
+        else:
+            bare = match.group("bare")
+            if bare:
+                tokens.append(bare)
     return tokens
 
 
@@ -162,9 +180,14 @@ def _token_hits_record(record: ResourceRecord, token: str) -> bool:
 def _field_hits(record: ResourceRecord, key: str, value: str) -> bool:
     match key:
         case "fd":
-            return value in record.fd.lower() or any(
-                value in alias.lower() for alias in record.aliases
-            )
+            # Descriptors are numeric identifiers, not free text: ``fd=1`` must
+            # not match FD 10/11/12. Aliases are checked too so a collapsed FD
+            # remains addressable. Non-numeric descriptors (cwd, txt, …) fall
+            # back to a substring match.
+            fds = (record.fd, *record.aliases)
+            if value.isdigit():
+                return any(fd.isdigit() and int(fd) == int(value) for fd in fds)
+            return any(value in fd.lower() for fd in fds)
         case "type":
             return value in record.resource_type.lower()
         case "proto" | "protocol":

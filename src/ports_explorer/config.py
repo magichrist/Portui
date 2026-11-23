@@ -293,8 +293,15 @@ def theme_names() -> list[str]:
 
 
 def with_tokens(css: str) -> str:
-    """Prepend the active theme's variables to a widget's ``DEFAULT_CSS``."""
-    return f"{design_tokens(CATALOG.active)}\n{css}"
+    """Return ``css`` unchanged — theme variables come from ``App.get_css_variables()``.
+
+    This helper used to prepend literal ``$token: #hex;`` declarations to widget
+    CSS. Textual *appends* CSS-declared values to the app-level variables, so the
+    baked values always won and live palette switching was impossible. It is kept
+    as a no-op shim so existing ``DEFAULT_CSS = with_tokens(...)`` declarations
+    remain valid without shadowing the active palette.
+    """
+    return css
 
 
 @dataclass(frozen=True, slots=True)

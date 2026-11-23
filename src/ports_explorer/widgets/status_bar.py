@@ -69,6 +69,8 @@ class StatusBar(Static):
         super().__init__(**kwargs)
         self._permission: PermissionState | None = None
         self._detail = ""
+        self._counts = ""
+        self._keys = ""
 
     def compose(self) -> ComposeResult:
         with Horizontal():
@@ -77,6 +79,7 @@ class StatusBar(Static):
             yield Static("", id="status-keys")
 
     def set_counts(self, text: str) -> None:
+        self._counts = text
         self.counts = text
         with suppress(Exception):
             self.query_one("#status-counts", Static).update(
@@ -84,6 +87,7 @@ class StatusBar(Static):
             )
 
     def set_keys(self, text: str) -> None:
+        self._keys = text
         with suppress(Exception):
             self.query_one("#status-keys", Static).update(Text(text, style=current_theme().muted))
 
@@ -95,3 +99,10 @@ class StatusBar(Static):
 
     def set_collection(self, result: CollectionResult) -> None:
         self.set_health(result.permission, result.warning() or "")
+
+    def refresh_content(self) -> None:
+        """Repaint all three segments with the currently active palette."""
+        self.set_counts(self._counts)
+        self.set_keys(self._keys)
+        if self._permission is not None:
+            self.set_health(self._permission, self._detail)

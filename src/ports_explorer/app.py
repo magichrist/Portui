@@ -90,17 +90,19 @@ class PortsExplorerApp(App):
         return theme
 
     def _refresh_visible_content(self) -> None:
-        """Re-render widgets whose text was baked with the previous palette."""
-        with suppress(Exception):
-            for screen in self.screen_stack:
-                for widget in screen.query("*"):
-                    redraw = getattr(widget, "render_overview", None) or getattr(
-                        widget, "render_detail", None
-                    )
+        """Re-render every widget whose colors were baked with the old palette.
+
+        Widgets expose either ``refresh_content`` (generic) or
+        ``render_overview`` / ``render_detail`` (screen-specific). Each call is
+        guarded on its own so one unmounted widget cannot skip the rest.
+        """
+        for screen in self.screen_stack:
+            for widget in screen.query("*"):
+                for hook in ("refresh_content", "render_overview", "render_detail"):
+                    redraw = getattr(widget, hook, None)
                     if callable(redraw):
-                        redraw()
-        with suppress(Exception):
-            self.screen.query_one("StatusBar").refresh_content()
+                        with suppress(Exception):
+                            redraw()
 
     def action_show_themes(self) -> None:
         self.push_screen(ThemePickerScreen(self))
