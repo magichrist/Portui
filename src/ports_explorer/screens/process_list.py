@@ -27,6 +27,7 @@ from .common import (
     KillMixin,
     ResponsiveMixin,
     format_interval,
+    handle_escape_jump,
     jump_step,
     move_cursor_by,
 )
@@ -412,6 +413,13 @@ class ProcessListScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[None
             event.stop()
             table = self.query_one("#process-grid", DataTable)
             move_cursor_by(table, step)
+            return
+        if handle_escape_jump(
+            self,
+            event,
+            self.query_one("#process-grid", DataTable),
+            self.action_clear_search,
+        ):
             return
         if isinstance(self.focused, Input) and event.key in ("up", "down"):
             event.stop()
