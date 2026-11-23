@@ -255,22 +255,24 @@ async def test_space_toggles_auto_update_on_the_detail_screen(auto_update) -> No
     app = PortsExplorerApp()
     async with app.run_test(size=(120, 40)) as pilot:
         screen = await _push_detail_for_self(app, pilot)
-        before = len(screen._deduped)
         assert screen.auto_update_enabled is True
+        first = screen._result.collected_at
 
-        # First press pauses: no re-collection, and we stay put.
+        # First press pauses: the timer must stop re-collecting.
         await pilot.press("space")
         await pilot.pause(1.2)
         assert isinstance(app.screen, ProcessDetailScreen)
         assert screen.auto_update_enabled is False
-        assert len(screen._deduped) == before
+        assert screen._result.collected_at == first
 
         # Second press resumes and catches up with a full lsof collection.
+        # Assert on the timestamp, not the row count: the test process's own
+        # descriptor set can legitimately change between lsof runs.
         await pilot.press("space")
         await pilot.pause(1.2)
         assert isinstance(app.screen, ProcessDetailScreen)
         assert screen.auto_update_enabled is True
-        assert len(screen._deduped) == before
+        assert screen._result.collected_at >= first
 
 
 async def test_space_toggles_auto_update_on_the_process_list(auto_update) -> None:
