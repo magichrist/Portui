@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from contextlib import suppress
 from typing import Any, ClassVar
 
@@ -21,6 +22,7 @@ from ..services.resource_search import (
     search_resources,
     tokenize,
 )
+from ..services.search_tags import split_tags
 from ..widgets.status_bar import StatusBar
 from .common import AppHeader, EmptyState, ResponsiveMixin, ScreenBanner
 
@@ -29,25 +31,28 @@ log = logging.getLogger(__name__)
 __all__ = ["ResourceBrowserScreen", "ResourceDetailScreen"]
 
 
+_FIELD_TOKEN = re.compile(r"^(?P<key>[a-zA-Z]+)[:=](?P<value>.+)$")
+
+
 def _filter_from_tokens(query: str) -> tuple[list[str], ResourceFilter]:
     """Split a raw query into free-text terms and structured filter fields.
 
-    ``port=8080`` and ``state=LISTEN`` become filter criteria; everything else is
-    treated as free text.
+    Both ``port=8080`` and ``port:8080`` become filter criteria; everything else
+    is treated as free text.
     """
     terms: list[str] = []
     criteria = ResourceFilter()
     # Use the shared tokenizer so a quoted phrase stays a single term even when
     # it contains spaces. ``query.split()`` used to break those apart.
     for token in tokenize(query):
-        # A quoted phrase is literal text even when it contains ``=``; treat it
-        # as a term rather than misreading it as a field constraint.
-        if getattr(token, "literal", False) or "=" not in token:
+        # A quoted phrase is literal text even when it contains ``=`` or ``:``;
+        # treat it as a term rather than misreading it as a field constraint.
+        field = None if getattr(token, "literal", False) else _FIELD_TOKEN.match(token)
+        if field is None:
             terms.append(token)
             continue
-        key, _, value = token.partition("=")
-        key = key.strip().lower()
-        value = value.strip()
+        key = field.group("key").strip().lower()
+        value = field.group("value").strip()
         if key in ("port", "lport") and value.isdigit():
             criteria.local_port = int(value)
         elif key == "rport" and value.isdigit():
@@ -106,7 +111,7 @@ class ResourceBrowserScreen(ResponsiveMixin, Screen[None]):
         )
         with Horizontal(id="browser-search-row"):
             yield Input(
-                placeholder="Search IP, port, state, path, fd…  try  port=8080  state=LISTEN",
+                placeholder="Search…  port:open  connection:alive  try  port=8080  state=LISTEN",
                 id="browser-search",
             )
         yield DataTable(id="browser-grid", zebra_stripes=True, cursor_type="row")
@@ -135,11 +140,18 @@ class ResourceBrowserScreen(ResponsiveMixin, Screen[None]):
         search.focus()
 
     def _apply(self, query: str) -> None:
-        _, criteria = _filter_from_tokens(query)
-        # Pass the *original* query through: re-joining the extracted terms used
-        # to re-split a quoted path containing spaces. search_resources applies
-        # the structured criteria itself.
-        self._shown = search_resources(self.records, query, criteria=criteria)
+        # Semantic tags (port:open / connection:alive and their abbreviations)
+        # are stripped before the field search so they never become a literal
+        # substring lookup. Everything else keeps the original behaviour.
+        remaining, predicates = split_tags(query)
+        _, criteria = _filter_from_tokens(remaining)
+        self._shown = search_resources(self.records, remaining, criteria=criteria)
+        if predicates:
+            self._shown = [
+                record
+                for record in self._shown
+                if all(predicate(record) for predicate in predicates)
+            ]
 
         table = self.query_one("#browser-grid", DataTable)
         table.clear()
