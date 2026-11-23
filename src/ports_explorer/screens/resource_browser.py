@@ -24,7 +24,15 @@ from ..services.resource_search import (
 )
 from ..services.search_tags import split_tags
 from ..widgets.status_bar import StatusBar
-from .common import AppHeader, EmptyState, ResponsiveMixin, ScreenBanner, jump_step, move_cursor_by
+from .common import (
+    AppHeader,
+    EmptyState,
+    ResponsiveMixin,
+    ScreenBanner,
+    handle_escape_jump,
+    jump_step,
+    move_cursor_by,
+)
 
 log = logging.getLogger(__name__)
 
@@ -253,10 +261,12 @@ class ResourceBrowserScreen(ResponsiveMixin, Screen[None]):
 
     def on_key(self, event: Any) -> None:
         # While typing, ↑/↓ move the result highlight without leaving the input.
+        table = self.query_one("#browser-grid", DataTable)
+        if handle_escape_jump(self, event, table, self.action_close_search):
+            return
         step = jump_step(event.key)
         if step is not None:
             event.stop()
-            table = self.query_one("#browser-grid", DataTable)
             move_cursor_by(table, step)
             return
         if isinstance(self.focused, Input) and event.key in ("up", "down"):
