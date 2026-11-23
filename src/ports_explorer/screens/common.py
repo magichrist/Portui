@@ -7,7 +7,6 @@ from contextlib import suppress
 from typing import Any
 
 from rich.text import Text
-from textual import work
 from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.widgets import Button, Input, Static
@@ -267,11 +266,15 @@ class KillMixin:
         stage = self._kill_stage or "term"
         self._disarm_kill()
         if stage == "force":
-            self.run_force_kill(pid, label)
+            coroutine = self.run_force_kill(pid, label)
         else:
-            self.run_terminate(pid, label)
+            coroutine = self.run_terminate(pid, label)
+        # Own the worker at app scope, not screen scope. A screen-owned worker
+        # is cancelled when the user navigates back during the SIGTERM grace
+        # period: the signal is already delivered but the confirmation, re-arm
+        # and list refresh never happen. App workers survive screen changes.
+        self.app.run_worker(coroutine, exclusive=True, group="kill")
 
-    @work(exclusive=True, group="kill")
     async def run_terminate(self, pid: int, label: str) -> None:
         """Send SIGTERM and wait, then report whether escalation is needed."""
         result = await terminate(pid)
@@ -280,7 +283,6 @@ class KillMixin:
             # Re-arm for the explicit hard kill rather than escalating silently.
             self._arm_kill(pid, "force", label)
 
-    @work(exclusive=True, group="kill")
     async def run_force_kill(self, pid: int, label: str) -> None:
         """Send SIGKILL after SIGTERM was already ignored."""
         result = await force_kill(pid)
@@ -336,7 +338,7 @@ class AppHeader(Static):
         """Repaint inline-styled text with the currently active palette."""
         with suppress(Exception):
             title = Text()
-            title.append("◈ PORTS EXPLORER", style=f"bold {current_theme().coral}")
+            title.append("◈ PORTS EXPLORER", style=f"bold {current_theme().header_color}")
             title.append("  ·  PROCESS · NETWORK · FILES", style=current_theme().muted)
             self.query_one("#header-title", Static).update(title)
             self.set_subtitle("inspection")
@@ -414,7 +416,7 @@ class EmptyState(Static):
         if self._body:
             rendered.append(f"{self._body}\n", style=current_theme().muted)
         if self._hint:
-            rendered.append(f"\n{self._hint}", style=current_theme().purple)
+            rendered.append(f"\n{self._hint}", style=current_theme().accent)
         return rendered
 
     def refresh_content(self) -> None:
