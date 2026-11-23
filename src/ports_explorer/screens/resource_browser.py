@@ -13,7 +13,7 @@ from textual.containers import Horizontal
 from textual.screen import Screen
 from textual.widgets import Button, DataTable, Input, Static
 
-from ..config import current_theme, with_tokens
+from ..config import current_theme
 from ..models import ProcessRecord, ResourceRecord
 from ..services.deduplication import deduplicate
 from ..services.resource_search import (
@@ -40,7 +40,9 @@ def _filter_from_tokens(query: str) -> tuple[list[str], ResourceFilter]:
     # Use the shared tokenizer so a quoted phrase stays a single term even when
     # it contains spaces. ``query.split()`` used to break those apart.
     for token in tokenize(query):
-        if "=" not in token:
+        # A quoted phrase is literal text even when it contains ``=``; treat it
+        # as a term rather than misreading it as a field constraint.
+        if getattr(token, "literal", False) or "=" not in token:
             terms.append(token)
             continue
         key, _, value = token.partition("=")
@@ -77,22 +79,6 @@ class ResourceBrowserScreen(ResponsiveMixin, Screen[None]):
         ("slash", "focus_search", "Search"),
         ("ctrl+f", "focus_search", "Search"),
     ]
-
-    DEFAULT_CSS = with_tokens("""
-    ResourceBrowserScreen {
-        height: 1fr;
-    }
-    ResourceBrowserScreen #browser-search-row {
-        height: 3;
-        padding: 0 1;
-    }
-    ResourceBrowserScreen #browser-empty {
-        display: none;
-    }
-    ResourceBrowserScreen.-empty #browser-empty {
-        display: block;
-    }
-    """)
 
     def __init__(
         self,
@@ -182,7 +168,7 @@ class ResourceBrowserScreen(ResponsiveMixin, Screen[None]):
             flags.append(f"+{len(record.aliases) - 1}FD")
         return [
             Text(record.fd, style=current_theme().caramel),
-            Text(record.resource_type, style=current_theme().purple),
+            Text(record.resource_type, style=current_theme().accent),
             Text(record.protocol, style=current_theme().muted),
             Text(record.display_name, style=current_theme().cotton),
             Text(record.state, style=current_theme().state_color(record.state)),
@@ -270,15 +256,6 @@ class ResourceDetailScreen(ResponsiveMixin, Screen[None]):
         ("left", "go_back", "Back"),
     ]
 
-    DEFAULT_CSS = with_tokens("""
-    ResourceDetailScreen {
-        height: 1fr;
-    }
-    ResourceDetailScreen #resource-detail {
-        height: 1fr;
-    }
-    """)
-
     def __init__(
         self,
         record: ResourceRecord,
@@ -319,7 +296,7 @@ class ResourceDetailScreen(ResponsiveMixin, Screen[None]):
                 current_theme().cotton,
             ),
             ("DESCRIPTOR", record.fd, current_theme().caramel),
-            ("TYPE", record.resource_type, current_theme().purple),
+            ("TYPE", record.resource_type, current_theme().accent),
             ("PROTOCOL", record.protocol, current_theme().cotton),
             ("STATE", record.state, current_theme().state_color(record.state)),
             ("LOCAL", str(record.local) or "unavailable", current_theme().cyan),
@@ -355,7 +332,7 @@ class ResourceDetailScreen(ResponsiveMixin, Screen[None]):
 
         rendered = Text()
         for key, value, style in rows:
-            rendered.append(f"{key:<18}", style=f"bold {current_theme().purple}")
+            rendered.append(f"{key:<18}", style=f"bold {current_theme().accent}")
             rendered.append(f"{value}\n", style=style)
 
         rendered.append(
