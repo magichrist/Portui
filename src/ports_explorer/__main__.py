@@ -34,6 +34,17 @@ def theme_choices() -> list[str]:
     return theme_names()
 
 
+def _positive_float(value: str) -> float:
+    """argparse type for options that must be greater than zero."""
+    try:
+        parsed = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"not a number: {value!r}") from exc
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be greater than 0")
+    return parsed
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ports-explorer",
@@ -70,10 +81,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--timeout",
-        type=float,
+        type=_positive_float,
         default=20.0,
         metavar="SECONDS",
-        help="Timeout for a single lsof collection (default: 20).",
+        help="Timeout for a single lsof collection (default: 20). Must be positive.",
     )
     parser.add_argument(
         "--theme",
@@ -110,11 +121,11 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if args.no_color:
-        # NO_COLOR is the standard signal. TEXTUAL_COLOR_SYSTEM is Textual's own
-        # runtime override (see textual/constants.py) — "none" stops the App
-        # from even probing the terminal for a color system.
+        # NO_COLOR is the standard signal and Textual/Rich honour it. Do NOT set
+        # TEXTUAL_COLOR_SYSTEM="none": Textual feeds that string straight into
+        # rich.Console(color_system=...), where only valid system names (or the
+        # Python value None) are keys — "none" raises KeyError at startup.
         os.environ["NO_COLOR"] = "1"
-        os.environ["TEXTUAL_COLOR_SYSTEM"] = "none"
 
     from .app import PortsExplorerApp
 
