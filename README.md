@@ -7,7 +7,7 @@
 <a href="https://www.python.org/"><img alt="python" src="https://img.shields.io/badge/python-3.12%2B-B983FF?style=flat-square&labelColor=140F1B"></a>
 <a href="https://textual.textualize.io/"><img alt="textual" src="https://img.shields.io/badge/built%20with-Textual-4ECDC4?style=flat-square&labelColor=140F1B"></a>
 <a href="#license"><img alt="license" src="https://img.shields.io/badge/license-MIT-6BCB77?style=flat-square&labelColor=140F1B"></a>
-<a href="#tests"><img alt="tests" src="https://img.shields.io/badge/tests-352%20passing-FFD93D?style=flat-square&labelColor=140F1B"></a>
+<a href="#tests"><img alt="tests" src="https://img.shields.io/badge/tests-362%20passing-FFD93D?style=flat-square&labelColor=140F1B"></a>
 <img alt="macos" src="https://img.shields.io/badge/macOS%20only-FF9F43?style=flat-square&labelColor=140F1B">
 
 <br>
@@ -392,7 +392,7 @@ at once and storm the UI.
 ## ✦ Tests
 
 ```bash
-python3 -m pytest -q        # 352 tests
+python3 -m pytest -q        # 362 tests
 python3 -m ruff check .
 python3 -m ruff format --check .
 ```
