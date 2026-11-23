@@ -71,7 +71,7 @@ class ResourceTable(Static):
 
     def compose(self) -> ComposeResult:
         yield Input(
-            placeholder="Filter: text, or port=8080 / state=LISTEN / proto=TCP",
+            placeholder="Filter…  port:open  connection:alive  port=8080  state=LISTEN",
             id="resource-filter",
             classes="resource-search",
         )
@@ -108,9 +108,9 @@ class ResourceTable(Static):
         return ""
 
     def _apply(self, query: str) -> None:
-        from ..services.resource_search import search_resources
+        from ..services.search_tags import apply_tags
 
-        self._filtered = search_resources(self._records, query) if query else list(self._records)
+        self._filtered = apply_tags(self._records, query)
         self._populate()
 
     def _populate(self) -> None:
