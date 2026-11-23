@@ -124,6 +124,9 @@ prefix, case-insensitively, and `=` works just as well as `:`:
 |:--|:--|:--|
 | `port:open` | `p:o`, `por:op`, `po:open`, `port=open` | TCP ports in `LISTEN` |
 | `connection:alive` | `c:a`, `con:ali`, `connection=alive` | TCP connections in `ESTABLISHED` |
+| `connection:waiting` | `c:w`, `conn:wai` | `CLOSE_WAIT` / `TIME_WAIT` connections |
+| `connection:closing` | `c:cl`, `co:closing` | `FIN_WAIT_1/2`, `CLOSING`, `LAST_ACK` |
+| `connection:new` | `c:n`, `conn:ne` | `SYN_SENT` / `SYN_RECV` handshakes |
 
 Quote a value to keep spaces together, e.g. `path="/Users/me/My Folder/file"`.
 On the main process list the state tags come from the system's TCP connections
