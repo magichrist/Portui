@@ -25,6 +25,7 @@ __all__ = [
     "KillMixin",
     "ResponsiveMixin",
     "ScreenBanner",
+    "move_cursor_by",
 ]
 
 
@@ -38,6 +39,15 @@ ARM_TIMEOUT = 5.0
 def format_interval(seconds: float) -> str:
     """Render a refresh interval for the status bar without trailing noise."""
     return f"{seconds:g}s"
+
+
+def move_cursor_by(table: Any, step: int) -> None:
+    """Move a ``DataTable`` cursor by ``step`` rows, clamped to the table."""
+    if table.row_count == 0:
+        return
+    current = table.cursor_row or 0
+    target = max(0, min(table.row_count - 1, current + step))
+    table.move_cursor(row=target)
 
 
 class AutoUpdateMixin:
