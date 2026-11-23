@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from tests.conftest import load_fixture
 from textual.widgets import DataTable, Input
 
@@ -64,6 +65,43 @@ async def test_alt_arrows_jump_ten_rows_while_typing() -> None:
         assert table.cursor_row == 0
 
 
+@pytest.mark.parametrize("key", ["alt+down", "ctrl+down", "super+down"])
+async def test_jump_key_aliases_move_ten_rows(key: str) -> None:
+    app = PortsExplorerApp()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause(0.7)
+        screen = app.screen
+        table = screen.query_one("#process-grid", DataTable)
+        assert table.row_count >= 12
+        table.move_cursor(row=0)
+        table.focus()
+        await pilot.pause()
+
+        await pilot.press(key)
+        await pilot.pause()
+        assert table.cursor_row == 10
+
+
+async def test_alt_arrows_jump_ten_rows_with_table_focused() -> None:
+    app = PortsExplorerApp()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause(0.7)
+        screen = app.screen
+        table = screen.query_one("#process-grid", DataTable)
+        assert table.row_count >= 12
+        table.move_cursor(row=0)
+        table.focus()
+        await pilot.pause()
+
+        await pilot.press("alt+down")
+        await pilot.pause()
+        assert table.cursor_row == 10
+
+        await pilot.press("alt+up")
+        await pilot.pause()
+        assert table.cursor_row == 0
+
+
 async def test_browser_search_arrows_move_highlight_without_leaving_input() -> None:
     records, _ = parse_lsof_output(load_fixture("lsof_states.txt"))
     app = PortsExplorerApp()
@@ -84,6 +122,27 @@ async def test_browser_search_arrows_move_highlight_without_leaving_input() -> N
         await pilot.pause()
         assert table.cursor_row == 1
         assert screen.focused is search
+
+
+async def test_browser_alt_arrows_jump_ten_rows_with_grid_focused() -> None:
+    records, _ = parse_lsof_output(load_fixture("lsof_states.txt"))
+    app = PortsExplorerApp()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause(0.4)
+        app.push_resource_search(records, ProcessRecord(pid=777, name="webserver"), None)
+        await pilot.pause(0.3)
+        screen = app.screen
+        assert isinstance(screen, ResourceBrowserScreen)
+        grid = screen.query_one("#browser-grid", DataTable)
+        grid.move_cursor(row=0)
+        grid.focus()
+        await pilot.pause()
+
+        await pilot.press("alt+down")
+        await pilot.pause()
+        # The fixture has only a handful of rows, so the jump clamps to the end.
+        assert grid.cursor_row == grid.row_count - 1
+        assert grid.row_count < 11
 
 
 async def test_table_filter_arrows_move_highlight_without_leaving_input() -> None:
