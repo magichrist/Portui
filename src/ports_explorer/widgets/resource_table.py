@@ -17,7 +17,7 @@ from textual.app import ComposeResult
 from textual.message import Message
 from textual.widgets import DataTable, Input, Static
 
-from ..config import current_theme, with_tokens
+from ..config import current_theme
 from ..models import ResourceCategory, ResourceRecord
 from ..services.deduplication import dedup_key
 
@@ -55,31 +55,6 @@ def _cell(text: str, style: str) -> Text:
 
 class ResourceTable(Static):
     """Searchable, filterable table of open resources for one process."""
-
-    DEFAULT_CSS = with_tokens("""
-    ResourceTable {
-        height: 1fr;
-    }
-    ResourceTable > .resource-search {
-        height: 3;
-        margin: 0 0 1 0;
-        display: none;
-    }
-    ResourceTable.-searching > .resource-search {
-        display: block;
-    }
-    ResourceTable DataTable {
-        height: 1fr;
-    }
-    ResourceTable .resource-empty {
-        height: auto;
-        padding: 1 2;
-        display: none;
-    }
-    ResourceTable.-empty .resource-empty {
-        display: block;
-    }
-    """)
 
     def __init__(
         self,
@@ -236,7 +211,7 @@ class ResourceTable(Static):
     def _file_cells(self, record: ResourceRecord) -> list[Text]:
         return [
             _cell(record.fd, current_theme().caramel),
-            _cell(record.resource_type, current_theme().purple),
+            _cell(record.resource_type, current_theme().accent),
             _cell(record.mode or "—", current_theme().muted),
             _cell(record.name, current_theme().cotton),
         ]
@@ -248,7 +223,7 @@ class ResourceTable(Static):
         )
         return [
             _cell(record.fd, current_theme().caramel),
-            _cell(record.resource_type, current_theme().purple),
+            _cell(record.resource_type, current_theme().accent),
             _cell(record.protocol, current_theme().muted),
             _cell(record.display_name, current_theme().cotton),
             _cell(state, state_style),
