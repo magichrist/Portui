@@ -54,6 +54,9 @@ class PortsExplorerApp(App):
 
     BINDINGS: ClassVar = [
         Binding("ctrl+q", "quit", "Quit", show=True, priority=True),
+        # Textual's built-in Ctrl+C is "help_quit" (it only shows a hint), and
+        # Input widgets bind it to "copy". Priority makes quit win everywhere.
+        Binding("ctrl+c", "quit", "Quit", show=True, priority=True),
         Binding("question_mark", "show_help", "Help", show=True),
         Binding("ctrl+t", "show_themes", "Themes", show=True, priority=True),
         Binding("t", "next_theme", "Next theme", show=False),
@@ -122,8 +125,8 @@ class PortsExplorerApp(App):
 
     def action_show_help(self) -> None:
         self.notify(
-            "↑↓ move  ⏎ open  ←/Esc back  / search  R auto-update  "
-            "1-6 tabs  k k terminate  T theme  Ctrl+T themes  Q quit",
+            "↑↓ move  ⏎ open  ←/Esc back  / search  Space pause/resume  R reload  "
+            "1-5 tabs  k k terminate  T theme  Ctrl+T themes  Q quit",
             title="Keyboard shortcuts",
             severity="information",
             timeout=8,

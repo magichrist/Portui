@@ -109,14 +109,14 @@ class AutoUpdateMixin:
             return "auto-update off  ·  R to refresh"
         if self.auto_update_enabled:
             return f"live {format_interval(self._auto_update_interval)}"
-        return "paused  ·  R to resume"
+        return "paused  ·  Space to resume"
 
     def action_refresh(self) -> None:
         """Run a full refresh, including anything too costly to do on a timer."""
         raise NotImplementedError
 
     def action_toggle_auto_update(self) -> None:
-        """``R``: pause a running refresh, or resume and catch up in one press.
+        """``Space``: pause a running refresh, or resume and catch up in one press.
 
         Resuming also performs an immediate full refresh, so a single press both
         updates stale data and puts the screen back on the timer.
@@ -232,7 +232,7 @@ class KillMixin:
             self.query_one("#status-bar", StatusBar).set_keys(self._default_key_hints())
 
     def _default_key_hints(self) -> str:
-        return "  /  search    R  auto-update    k  terminate  Q  quit  "
+        return "  /  search    Space  pause    R  reload    k  terminate  Q  quit  "
 
     # -- the action -------------------------------------------------------
 
