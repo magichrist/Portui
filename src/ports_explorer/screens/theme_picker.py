@@ -29,13 +29,6 @@ PREVIEW_ROWS: list[tuple[str, str, str]] = [
 class ThemeSwatch(Static):
     """A horizontal colour bar previewing a palette."""
 
-    DEFAULT_CSS = """
-    ThemeSwatch {
-        height: 1;
-        margin: 0 0 1 0;
-    }
-    """
-
     def set_theme(self, theme: Theme) -> None:
         order = ("coral", "amber", "lime", "cyan", "blue", "purple", "caramel", "cotton")
         rendered = Text()
@@ -56,23 +49,6 @@ class ThemePickerScreen(Screen[None]):
         ("q", "close", "Back"),
         ("t", "next_theme", "Next"),
     ]
-
-    DEFAULT_CSS = """
-    ThemePickerScreen {
-        height: 1fr;
-    }
-    ThemePickerScreen #theme-preview {
-        height: auto;
-        margin: 0 2 1 2;
-        padding: 1 2;
-        border: round $purple;
-        background: $surface-alt;
-    }
-    ThemePickerScreen #theme-preview-name {
-        color: $coral;
-        text-style: bold;
-    }
-    """
 
     def __init__(self, app: Any, **kwargs: Any) -> None:
         super().__init__(**kwargs)
