@@ -9,7 +9,8 @@ select the same records::
 Five tags ship today:
 
 ``port:open``
-    A TCP port in ``LISTEN`` state — a bound, listening service.
+    Any resource with a bound local port — listening *or* an active client
+    connection (e.g. Notes has established connections but no listener).
 ``connection:alive``
     A TCP connection in ``ESTABLISHED`` state — a live, established connection.
 ``connection:waiting``
@@ -73,8 +74,12 @@ def _in_states(record: ResourceRecord, states: frozenset[SocketState]) -> bool:
 
 
 def _is_open_port(record: ResourceRecord) -> bool:
-    """Bound TCP port in LISTEN state — a service waiting for connections."""
-    return _in_states(record, frozenset({SocketState.LISTEN}))
+    """Any bound local port — listener, established client socket or UDP.
+
+    A client-only app such as Notes has no LISTEN descriptor, so restricting
+    this tag to LISTEN hid processes that very obviously have a port open.
+    """
+    return record.local.port is not None
 
 
 def _is_alive_connection(record: ResourceRecord) -> bool:
@@ -201,9 +206,7 @@ def _empty_pid_sets() -> dict[str, set[int]]:
     return {tag.label: set() for tag in TAGS}
 
 
-def _collect_pid(
-    sets: dict[str, set[int]], pid: int | None, status: str | None
-) -> None:
+def _collect_pid(sets: dict[str, set[int]], pid: int | None, status: str | None) -> None:
     if pid is None or pid <= 0:
         return
     label = _STATUS_TAG.get(_normalize_status(status))
@@ -219,10 +222,30 @@ def _psutil_pid_sets() -> dict[str, set[int]]:
     except (psutil.AccessDenied, psutil.Error, OSError, NotImplementedError):
         return sets
     for connection in connections:
+        pid = getattr(connection, "pid", None)
+        # port:open means any bound local port, including UDP and client-side
+        # established sockets that never enter LISTEN.
+        laddr = getattr(connection, "laddr", None)
+        if pid is not None and pid > 0 and getattr(laddr, "port", None) is not None:
+            sets["port:open"].add(pid)
         if connection.type != socket.SOCK_STREAM:
             continue
         _collect_pid(sets, connection.pid, connection.status)
     return sets
+
+
+def _lsof_local_port(value: str) -> int | None:
+    """Extract the local port from an lsof ``n`` field (``*:80``, ``[::1]:443``…)."""
+    local = value.split("->", 1)[0]
+    if local.startswith("["):
+        closing = local.find("]")
+        if closing == -1:
+            return None
+        local = local[closing + 1 :]
+    if ":" not in local:
+        return None
+    port = local.rsplit(":", 1)[1]
+    return int(port) if port.isdigit() else None
 
 
 async def _lsof_pid_sets() -> dict[str, set[int]]:
@@ -232,8 +255,8 @@ async def _lsof_pid_sets() -> dict[str, set[int]]:
         process = await asyncio.create_subprocess_exec(
             "lsof",
             "-nP",
-            "-iTCP",
-            "-FpT",
+            "-i",
+            "-FpnT",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
         )
@@ -245,6 +268,9 @@ async def _lsof_pid_sets() -> dict[str, set[int]]:
     for line in stdout.decode(errors="replace").splitlines():
         if line.startswith("p") and line[1:].isdigit():
             pid = int(line[1:])
+        elif line.startswith("n") and pid is not None:
+            if _lsof_local_port(line[1:]) is not None:
+                sets["port:open"].add(pid)
         elif line.startswith("TST=") and pid is not None:
             _collect_pid(sets, pid, line[4:])
     return sets
