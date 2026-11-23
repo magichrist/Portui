@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import socket
+from dataclasses import replace
 from types import SimpleNamespace
 
 import psutil
@@ -41,6 +42,15 @@ def records(states_output: str):
         ("c", "a", "connection:alive"),
         ("con", "ali", "connection:alive"),
         ("co", "alive", "connection:alive"),
+        ("connection", "waiting", "connection:waiting"),
+        ("c", "w", "connection:waiting"),
+        ("conn", "wai", "connection:waiting"),
+        ("connection", "closing", "connection:closing"),
+        ("c", "cl", "connection:closing"),
+        ("co", "closing", "connection:closing"),
+        ("connection", "new", "connection:new"),
+        ("c", "n", "connection:new"),
+        ("conn", "ne", "connection:new"),
     ],
 )
 def test_prefix_spellings_resolve(key: str, value: str, label: str) -> None:
@@ -57,6 +67,40 @@ def test_unknown_or_ambiguous_pair_does_not_resolve() -> None:
 
 def test_all_tags_have_unique_labels() -> None:
     assert len({tag.label for tag in TAGS}) == len(TAGS)
+    assert {tag.label for tag in TAGS} == {
+        "port:open",
+        "connection:alive",
+        "connection:waiting",
+        "connection:closing",
+        "connection:new",
+    }
+
+
+def test_connection_state_tags_select_the_right_states(records) -> None:
+    base = records[0]
+
+    def variant(state: str):
+        return replace(base, state=state, name=f"record-{state}")
+
+    groups = {
+        "LISTEN": [variant("LISTEN")],
+        "ESTABLISHED": [variant("ESTABLISHED")],
+        "waiting": [variant("CLOSE_WAIT"), variant("TIME_WAIT")],
+        "closing": [
+            variant("FIN_WAIT_1"),
+            variant("FIN_WAIT_2"),
+            variant("CLOSING"),
+            variant("LAST_ACK"),
+        ],
+        "new": [variant("SYN_SENT"), variant("SYN_RECV")],
+    }
+    everything = [record for group in groups.values() for record in group]
+
+    assert apply_tags(everything, "port:open") == groups["LISTEN"]
+    assert apply_tags(everything, "c:a") == groups["ESTABLISHED"]
+    assert apply_tags(everything, "c:w") == groups["waiting"]
+    assert apply_tags(everything, "c:cl") == groups["closing"]
+    assert apply_tags(everything, "c:n") == groups["new"]
 
 
 def test_split_tags_removes_only_recognized_tags() -> None:
@@ -143,6 +187,8 @@ async def test_network_pid_sets_classifies_only_tcp_states(monkeypatch) -> None:
         SimpleNamespace(pid=10, type=socket.SOCK_STREAM, status=psutil.CONN_LISTEN),
         SimpleNamespace(pid=20, type=socket.SOCK_STREAM, status=psutil.CONN_ESTABLISHED),
         SimpleNamespace(pid=20, type=socket.SOCK_STREAM, status=psutil.CONN_CLOSE_WAIT),
+        SimpleNamespace(pid=40, type=socket.SOCK_STREAM, status="FIN_WAIT1"),
+        SimpleNamespace(pid=50, type=socket.SOCK_STREAM, status="SYN_RECV"),
         SimpleNamespace(pid=30, type=socket.SOCK_DGRAM, status=psutil.CONN_LISTEN),
         SimpleNamespace(pid=None, type=socket.SOCK_STREAM, status=psutil.CONN_LISTEN),
     ]
@@ -150,9 +196,12 @@ async def test_network_pid_sets_classifies_only_tcp_states(monkeypatch) -> None:
         "ports_explorer.services.search_tags.psutil.net_connections",
         lambda kind="inet": connections,
     )
-    listening, established = await network_pid_sets()
-    assert listening == {10}
-    assert established == {20}
+    pids = await network_pid_sets()
+    assert pids["port:open"] == {10}
+    assert pids["connection:alive"] == {20}
+    assert pids["connection:waiting"] == {20}
+    assert pids["connection:closing"] == {40}
+    assert pids["connection:new"] == {50}
 
 
 async def test_network_pid_sets_falls_back_to_lsof_on_macos(monkeypatch) -> None:
@@ -161,20 +210,29 @@ async def test_network_pid_sets_falls_back_to_lsof_on_macos(monkeypatch) -> None
         lambda kind="inet": [],
     )
 
-    async def fake_lsof() -> tuple[set[int], set[int]]:
-        return {101}, {202}
+    async def fake_lsof() -> dict[str, set[int]]:
+        return {"port:open": {101}, "connection:alive": {202}}
 
     monkeypatch.setattr("ports_explorer.services.search_tags._lsof_pid_sets", fake_lsof)
-    assert await network_pid_sets() == ({101}, {202})
+    assert await network_pid_sets() == {
+        "port:open": {101},
+        "connection:alive": {202},
+    }
 
 
 def test_split_process_tags_resolves_abbreviations() -> None:
-    query, predicates = split_process_tags("p:o c:a web", listening={1, 2}, established={3})
+    pids = {
+        "port:open": {1, 2},
+        "connection:alive": {3},
+        "connection:waiting": {4},
+        "connection:closing": {5},
+        "connection:new": {6},
+    }
+    query, predicates = split_process_tags("p:o c:a c:w c:cl c:n web", pids=pids)
     assert query == "web"
-    assert len(predicates) == 2
-    process = ProcessRecord(pid=1, name="web")
-    assert predicates[0](process) is True
-    assert predicates[1](process) is False
+    assert len(predicates) == 5
+    checks = zip(predicates, (1, 3, 4, 5, 6), strict=True)
+    assert all(predicate(ProcessRecord(pid=pid, name="x")) for predicate, pid in checks)
 
 
 async def test_main_search_bar_filters_by_open_port_tag() -> None:
@@ -184,8 +242,10 @@ async def test_main_search_bar_filters_by_open_port_tag() -> None:
         screen = app.screen
         assert len(screen._all) >= 2
         listener, other = screen._all[0], screen._all[1]
-        screen._listening_pids = {listener.pid}
-        screen._established_pids = {other.pid}
+        screen._tag_pids = {
+            "port:open": {listener.pid},
+            "connection:alive": {other.pid},
+        }
 
         search = screen.query_one("#process-search", Input)
         search.focus()
