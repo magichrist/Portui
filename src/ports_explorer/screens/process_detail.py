@@ -598,6 +598,11 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
             return
         self.app.push_resource_detail(record, self.process, self)
 
+    @on(ResourceTable.ResourceActivated)
+    def _on_resource_activated_from_search(self, message: ResourceTable.ResourceActivated) -> None:
+        message.stop()
+        self.app.push_resource_detail(message.record, self.process, self)
+
     def on_resource_table_record_count_changed(self, message: Any) -> None:
         message.stop()
         # All five tables repopulate on every collection and each posts this
