@@ -11,7 +11,7 @@ from textual.containers import Horizontal
 from textual.reactive import reactive
 from textual.widgets import Static
 
-from ..config import current_theme, with_tokens
+from ..config import current_theme
 from ..models import CollectionResult, PermissionState
 
 __all__ = ["HealthBadge", "StatusBar"]
@@ -20,20 +20,12 @@ __all__ = ["HealthBadge", "StatusBar"]
 class HealthBadge(Static):
     """Small colored chip describing how trustworthy a collection was."""
 
-    DEFAULT_CSS = with_tokens("""
-    HealthBadge {
-        height: 1;
-        padding: 0 1;
-        content-align: left middle;
-    }
-    """)
-
     def show(self, permission: PermissionState, detail: str = "") -> None:
         label, style = {
             PermissionState.OK: ("● complete", current_theme().lime),
             PermissionState.PARTIAL: ("● partial", current_theme().orange),
-            PermissionState.DENIED: ("● permission denied", current_theme().coral),
-            PermissionState.FAILED: ("● failed", current_theme().coral),
+            PermissionState.DENIED: ("● permission denied", current_theme().danger),
+            PermissionState.FAILED: ("● failed", current_theme().danger),
             PermissionState.GONE: ("● process exited", current_theme().muted),
         }[permission]
         self.update(Text(label, style=style))
@@ -44,26 +36,6 @@ class StatusBar(Static):
     """Bottom strip with counts, collection health and contextual key hints."""
 
     counts: reactive[str] = reactive("")
-
-    DEFAULT_CSS = with_tokens("""
-    StatusBar {
-        height: 1;
-        background: $surface;
-        color: $muted;
-    }
-    StatusBar #status-counts {
-        width: 1fr;
-        padding: 0 2;
-    }
-    StatusBar #status-health {
-        width: auto;
-        padding: 0 2;
-    }
-    StatusBar #status-keys {
-        width: auto;
-        padding: 0 2;
-    }
-    """)
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
