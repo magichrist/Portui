@@ -63,9 +63,10 @@ def test_catalog_contains_a_gummy_theme() -> None:
     assert gummy.purple == "#B983FF"
 
 
-def test_gummy_is_the_default_theme() -> None:
-    assert DEFAULT_THEME == "gummy"
-    assert get_settings().theme == "gummy"
+def test_ambrosia_is_the_default_theme() -> None:
+    assert DEFAULT_THEME == "ambrosia"
+    assert get_settings().theme == "ambrosia"
+    assert "ambrosia" in PALETTES
 
 
 def test_every_palette_has_the_same_token_shape() -> None:
@@ -94,11 +95,11 @@ def test_with_tokens_does_not_bake_palette_values() -> None:
 
 def test_setting_an_unknown_theme_returns_none() -> None:
     assert set_theme("definitely-not-a-theme") is None
-    assert current_theme().name == "gummy"
+    assert current_theme().name == DEFAULT_THEME
 
 
 def test_cycle_wraps_in_both_directions() -> None:
-    catalog = ThemeCatalog("gummy")
+    catalog = ThemeCatalog(DEFAULT_THEME)
     names = catalog.names
     first = names[0]
 
@@ -114,11 +115,11 @@ def test_cycle_wraps_in_both_directions() -> None:
 def test_cycle_lands_on_the_named_theme() -> None:
     # A local catalog: cycling it must move *this* catalog, not the module-level
     # CATALOG that current_theme() reads.
-    catalog = ThemeCatalog("gummy")
+    catalog = ThemeCatalog(DEFAULT_THEME)
     theme = catalog.cycle(3)
     assert theme.name == catalog.names[3]
     assert catalog.active.name == theme.name
-    assert catalog.active.name != "gummy"
+    assert catalog.active.name != DEFAULT_THEME
 
 
 def test_themes_differ_from_each_other() -> None:
