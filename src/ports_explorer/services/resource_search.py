@@ -52,6 +52,28 @@ _SUPPORTED_KEYS = frozenset(
 )
 
 
+class _Token(str):
+    """A token that remembers whether it came from a quoted phrase.
+
+    Quotes are stripped so the token matches the text a user sees, but a
+    standalone quoted phrase must stay literal. Without this marker a phrase
+    containing ``=`` (e.g. ``"foo=bar/baz"``) would be re-parsed downstream as
+    a field filter and the quoted key would be silently discarded.
+    """
+
+    __slots__ = ("literal",)
+
+    def __new__(cls, value: str, *, literal: bool = False) -> _Token:
+        token = super().__new__(cls, value)
+        token.literal = literal
+        return token
+
+
+def _is_field_token(token: str) -> bool:
+    """True for ``key=value`` tokens, never for a quoted phrase."""
+    return not getattr(token, "literal", False) and _KV.match(token) is not None
+
+
 def tokenize(query: str) -> list[str]:
     """Split a query into tokens, honouring double-quoted phrases.
 
@@ -66,15 +88,15 @@ def tokenize(query: str) -> list[str]:
             if len(value) >= 2 and value.startswith('"') and value.endswith('"'):
                 value = value[1:-1]
             if value:
-                tokens.append(f"{match.group('key')}={value}")
+                tokens.append(_Token(f"{match.group('key')}={value}"))
         elif match.group("phrase") is not None:
             phrase = match.group("phrase")[1:-1]
             if phrase:
-                tokens.append(phrase)
+                tokens.append(_Token(phrase, literal=True))
         else:
             bare = match.group("bare")
             if bare:
-                tokens.append(bare)
+                tokens.append(_Token(bare))
     return tokens
 
 
@@ -97,8 +119,11 @@ class ResourceFilter:
     listening_only: bool = False
 
     def is_active(self) -> bool:
+        # Use identity checks: ``0 == False`` in Python, so a membership test
+        # would silently drop an explicit ``local_port=0`` / ``remote_port=0``
+        # constraint while ``describe()`` still claimed it was applied.
         return any(
-            value not in (None, "", False)
+            value is not None and value != "" and value is not False
             for value in (
                 self.protocol,
                 self.state,
@@ -167,6 +192,8 @@ def filter_resources(
 
 
 def _token_hits_record(record: ResourceRecord, token: str) -> bool:
+    if getattr(token, "literal", False):
+        return token.lower() in record.search_blob
     key_match = _KV.match(token)
     if key_match:
         key = key_match.group("key").lower()
@@ -225,8 +252,8 @@ def search_resources(
     if not tokens:
         return list(candidates)
 
-    free_tokens = [token for token in tokens if not _KV.match(token)]
-    key_tokens = [token for token in tokens if _KV.match(token)]
+    free_tokens = [token for token in tokens if not _is_field_token(token)]
+    key_tokens = [token for token in tokens if _is_field_token(token)]
 
     results: list[ResourceRecord] = []
     for record in candidates:

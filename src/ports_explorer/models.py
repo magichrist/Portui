@@ -290,7 +290,14 @@ class ResourceRecord:
 
     @property
     def is_listening(self) -> bool:
-        return self.is_inet and self.socket_state is SocketState.LISTEN
+        # The tab is labelled "TCP listening ports" and the Bash reference this
+        # port replaces requires both TCP and LISTEN. A UDP socket reporting
+        # LISTEN is not a bound TCP service, so it must not inflate the count.
+        return (
+            self.is_inet
+            and self.transport is TransportProtocol.TCP
+            and self.socket_state is SocketState.LISTEN
+        )
 
     @property
     def is_unix_socket(self) -> bool:
@@ -314,6 +321,9 @@ class ResourceRecord:
             str(self.pid),
             self.user,
             self.fd,
+            # Collapsed descriptors stay findable: ``fd=11`` can reach an alias,
+            # so a bare ``11`` should reach the same row for the same reason.
+            *self.aliases,
             self.resource_type,
             self.protocol,
             self.name,
