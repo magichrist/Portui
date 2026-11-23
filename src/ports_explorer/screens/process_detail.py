@@ -37,6 +37,7 @@ from .common import (
     ResponsiveMixin,
     ScreenBanner,
     format_interval,
+    handle_escape_jump,
 )
 
 log = logging.getLogger(__name__)
@@ -564,6 +565,10 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
 
         Any key other than ``k`` cancels a pending terminate.
         """
+        active = self._active_table()
+        grid = active.query_one("#resource-grid", DataTable) if active else None
+        if handle_escape_jump(self, event, grid, self.action_go_back):
+            return
         if event.key not in ("left", "right", "k"):
             self._disarm_kill()
             return
