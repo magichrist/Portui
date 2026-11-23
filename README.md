@@ -122,7 +122,7 @@ prefix, case-insensitively, and `=` works just as well as `:`:
 
 | Tag | Also accepts | Finds |
 |:--|:--|:--|
-| `port:open` | `p:o`, `por:op`, `po:open`, `port=open` | TCP ports in `LISTEN` |
+| `port:open` | `p:o`, `por:op`, `po:open`, `port=open` | Any bound local port — listening or active connection |
 | `connection:alive` | `c:a`, `con:ali`, `connection=alive` | TCP connections in `ESTABLISHED` |
 | `connection:waiting` | `c:w`, `conn:wai` | `CLOSE_WAIT` / `TIME_WAIT` connections |
 | `connection:closing` | `c:cl`, `co:closing` | `FIN_WAIT_1/2`, `CLOSING`, `LAST_ACK` |
