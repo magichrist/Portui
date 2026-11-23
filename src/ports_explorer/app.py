@@ -16,6 +16,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import Footer
 
+from . import design
 from .collectors.lsof import LsofCollector
 from .collectors.processes import ProcessCollector
 from .config import (
@@ -68,8 +69,15 @@ class PortsExplorerApp(App):
         set_theme(self._theme_name)
 
     def get_css_variables(self) -> dict[str, str]:
-        """Feed the active palette into every stylesheet, including widget CSS."""
+        """Feed the design system into every stylesheet.
+
+        The TUI-Maker variable overrides are applied first so Textual's blue
+        focus rings and borders can never leak through. The active theme's
+        tokens are applied on top, so switching palettes (including the five
+        legacy ones) still repaints the whole UI.
+        """
         variables = super().get_css_variables()
+        variables.update(design.textual_variables())
         variables.update(CATALOG.active.tokens())
         return variables
 
