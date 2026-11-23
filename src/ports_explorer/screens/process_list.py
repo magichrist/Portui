@@ -27,6 +27,7 @@ from .common import (
     KillMixin,
     ResponsiveMixin,
     format_interval,
+    move_cursor_by,
 )
 
 log = logging.getLogger(__name__)
@@ -369,7 +370,13 @@ class ProcessListScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[None
     @on(Input.Submitted, "#process-search")
     def _on_search_submitted(self, event: Input.Submitted) -> None:
         event.stop()
-        self.query_one("#process-grid", DataTable).focus()
+        table = self.query_one("#process-grid", DataTable)
+        table.focus()
+        # One Enter opens the highlighted row — no second Enter needed. The
+        # RowSelected message bubbles to the normal handler, so every guard
+        # (empty list, selection restore, kill disarm) still applies.
+        if table.row_count:
+            table.action_select_cursor()
 
     @on(DataTable.RowHighlighted, "#process-grid")
     def _on_highlight(self, event: DataTable.RowHighlighted) -> None:
@@ -394,11 +401,24 @@ class ProcessListScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[None
         self.app.push_process_detail(process, cursor_pid=self._cursor_pid)
 
     def on_key(self, event: Any) -> None:
-        """Left arrow returns to the previous screen only outside the input.
+        """Up/down browse results while typing; left goes back outside inputs.
 
         Any key other than ``k`` also cancels a pending terminate, so the app
         never sits armed waiting for a confirm.
         """
+        if isinstance(self.focused, Input) and event.key in (
+            "up",
+            "down",
+            "alt+up",
+            "alt+down",
+        ):
+            event.stop()
+            table = self.query_one("#process-grid", DataTable)
+            step = 10 if event.key.startswith("alt+") else 1
+            if event.key.endswith("up"):
+                step = -step
+            move_cursor_by(table, step)
+            return
         if event.key not in ("left", "k"):
             self._disarm_kill()
             return
