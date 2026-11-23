@@ -4,10 +4,26 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
+from .design import (
+    AMBER,
+    DARK_PANEL_BG,
+    DEEP_PANEL_BG,
+    GUMMY_LIGHT_PINK,
+    GUMMY_PINK,
+    GUMMY_RED,
+    HOVER_BG,
+    PHOSPHOR,
+    SELECTED_BG,
+    TEXT_MUTED,
+    TEXT_PRIMARY,
+    YELLOW,
+)
+
 __all__ = [
+    "AMBROSIA",
     "PALETTES",
     "Settings",
     "Theme",
@@ -49,6 +65,42 @@ class Theme:
     muted: str
     danger: str
 
+    # TUI-Maker "Female Cyber Space" role colours. Empty means "derive from the
+    # classic palette", so the five legacy themes stay valid without repeating
+    # every role. Ambrosia fills all of them with the exact design.py values.
+    border: str = ""
+    accent_text: str = ""
+    focus: str = ""
+    header: str = ""
+    selection_text: str = ""
+    hover: str = ""
+
+    @property
+    def border_color(self) -> str:
+        """Structural pink for borders and dividers (never used as text)."""
+        return self.border or self.purple
+
+    @property
+    def accent(self) -> str:
+        """Pink *text* — GUMMY_PINK reads red, so this is the light variant."""
+        return self.accent_text or self.purple
+
+    @property
+    def focus_color(self) -> str:
+        return self.focus or self.purple
+
+    @property
+    def header_color(self) -> str:
+        return self.header or self.lime
+
+    @property
+    def selection(self) -> str:
+        return self.selection_text or self.cotton
+
+    @property
+    def hover_color(self) -> str:
+        return self.hover or self.surface_raised
+
     def tokens(self) -> dict[str, str]:
         """CSS variable name to hex value."""
         return {
@@ -68,6 +120,14 @@ class Theme:
             "cotton": self.cotton,
             "caramel": self.caramel,
             "danger": self.danger,
+            # Prefixed so they never collide with Textual's own variable names
+            # (e.g. ``accent``/``border``) set by ``design.textual_variables()``.
+            "role-border": self.border_color,
+            "role-accent": self.accent,
+            "role-focus": self.focus_color,
+            "role-header": self.header_color,
+            "role-selection": self.selection,
+            "role-hover": self.hover_color,
         }
 
     def state_color(self, state: str) -> str:
@@ -221,10 +281,41 @@ DAYLIGHT = Theme(
 )
 
 
+AMBROSIA = Theme(
+    name="ambrosia",
+    label="Ambrosia",
+    # Pink text (GUMMY_LIGHT_PINK) — GUMMY_PINK is reserved for borders.
+    coral=GUMMY_LIGHT_PINK,
+    orange=AMBER,
+    amber=AMBER,
+    yellow=YELLOW,
+    lime=PHOSPHOR,
+    # There is no cyan or blue in the Female Cyber Space palette. Network
+    # accents use amber, remote endpoints/state use phosphor.
+    cyan=AMBER,
+    blue=PHOSPHOR,
+    purple=GUMMY_PINK,
+    grape=GUMMY_LIGHT_PINK,
+    mint=PHOSPHOR,
+    caramel=TEXT_MUTED,
+    cotton=TEXT_PRIMARY,
+    surface=DEEP_PANEL_BG,
+    surface_alt=DARK_PANEL_BG,
+    surface_raised=SELECTED_BG,
+    muted=TEXT_MUTED,
+    danger=GUMMY_RED,
+    border=GUMMY_PINK,
+    accent_text=GUMMY_LIGHT_PINK,
+    focus=AMBER,
+    header=PHOSPHOR,
+    selection_text=YELLOW,
+    hover=HOVER_BG,
+)
+
 PALETTES: dict[str, Theme] = {
-    theme.name: theme for theme in (GUMMY, MIDNIGHT, TOKYO, GRUVBOX, NEBULA, DAYLIGHT)
+    theme.name: theme for theme in (AMBROSIA, GUMMY, MIDNIGHT, TOKYO, GRUVBOX, NEBULA, DAYLIGHT)
 }
-DEFAULT_THEME = "gummy"
+DEFAULT_THEME = "ambrosia"
 
 
 def design_tokens(theme: Theme) -> str:
@@ -277,7 +368,14 @@ CATALOG = ThemeCatalog()
 
 
 def set_theme(name: str) -> Theme | None:
-    return CATALOG.set(name)
+    theme = CATALOG.set(name)
+    if theme is not None:
+        # Keep the two sources of theme truth in sync. A later app reads
+        # Settings.theme in __init__; leaving it stale would silently revert a
+        # palette chosen live (or by a preceding headless test).
+        global _SETTINGS
+        _SETTINGS = replace(_SETTINGS, theme=theme.name)
+    return theme
 
 
 def cycle_theme(step: int = 1) -> Theme:
@@ -317,7 +415,7 @@ class Settings:
 
     @property
     def log_level(self) -> int:
-        return logging.DEBUG if self.debug else logging.WARNING
+        return logging.DEBUG if self.debug or self.log_file is not None else logging.WARNING
 
 
 _SETTINGS = Settings()
@@ -347,7 +445,9 @@ def build_settings(
         debug=debug,
         log_file=path,
         refresh_interval=max(0.0, refresh_interval),
-        lsof_timeout=lsof_timeout,
+        # A non-positive timeout makes every asyncio.wait_for() fail instantly;
+        # the CLI validates this too, but clamp programmatic callers as well.
+        lsof_timeout=max(0.001, lsof_timeout),
         theme=CATALOG.active.name,
     )
     return _SETTINGS
@@ -355,7 +455,9 @@ def build_settings(
 
 def configure_logging(debug: bool = False, log_file: str | Path | None = None) -> None:
     """Send diagnostics to a log file — never into the rendered UI."""
-    level = logging.DEBUG if debug else logging.WARNING
+    # An explicitly requested log file is a request for diagnostics, not just
+    # warnings — otherwise --log-file alone produces a near-empty file.
+    level = logging.DEBUG if debug or log_file is not None else logging.WARNING
     handlers: list[logging.Handler] = []
 
     if log_file is not None:
