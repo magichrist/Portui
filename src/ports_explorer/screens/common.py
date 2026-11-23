@@ -18,6 +18,7 @@ from ..widgets.status_bar import StatusBar
 __all__ = [
     "ARM_TIMEOUT",
     "COMPACT_WIDTH",
+    "ESC_JUMP_WINDOW",
     "JUMP_KEYS",
     "NARROW_WIDTH",
     "AppHeader",
@@ -26,6 +27,7 @@ __all__ = [
     "KillMixin",
     "ResponsiveMixin",
     "ScreenBanner",
+    "handle_escape_jump",
     "jump_step",
     "move_cursor_by",
 ]
@@ -59,6 +61,42 @@ JUMP_KEYS: dict[str, int] = {
 def jump_step(key: str) -> int | None:
     """Return the row jump for ``key``, or ``None`` if it is not a jump key."""
     return JUMP_KEYS.get(key)
+
+
+ESC_JUMP_WINDOW = 0.12
+"""How long an ``escape`` stays pending as a possible Alt+Arrow prefix."""
+
+
+def handle_escape_jump(screen: Any, event: Any, table: Any, fallback: Any) -> bool:
+    """Treat ``escape`` + arrow (how terminals encode Option+Arrow) as a jump.
+
+    Esc on its own still performs ``fallback`` — just 120ms later — so normal
+    back/clear behaviour is unchanged to the user. Consumes the event when it
+    handled it, so bindings don't also act on the same keystroke.
+    """
+    if event.key == "escape":
+        screen._esc_jump_at = time.monotonic()
+        screen._esc_jump_row = table.cursor_row if table is not None else 0
+        screen._esc_jump_pending = True
+        # A single escape must still act like escape; doing it after the current
+        # refresh means a paired arrow (same input batch) can cancel it first.
+        screen.call_after_refresh(fallback)
+        event.stop()
+        return True
+
+    if (
+        event.key in ("up", "down")
+        and getattr(screen, "_esc_jump_pending", False)
+        and time.monotonic() - screen._esc_jump_at <= ESC_JUMP_WINDOW
+    ):
+        event.stop()
+        screen._esc_jump_pending = False
+        if table is not None and table.row_count:
+            step = 10 if event.key == "down" else -10
+            target = max(0, min(table.row_count - 1, screen._esc_jump_row + step))
+            table.move_cursor(row=target)
+        return True
+    return False
 
 
 def move_cursor_by(table: Any, step: int) -> None:
