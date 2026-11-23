@@ -6,12 +6,18 @@ select the same records::
 
     port:open   p:o   por:op   po:open   PORT=OPEN
 
-Two tags ship today:
+Five tags ship today:
 
 ``port:open``
     A TCP port in ``LISTEN`` state — a bound, listening service.
 ``connection:alive``
     A TCP connection in ``ESTABLISHED`` state — a live, established connection.
+``connection:waiting``
+    ``CLOSE_WAIT`` / ``TIME_WAIT`` — the peer is gone or the close is pending.
+``connection:closing``
+    ``FIN_WAIT_1`` / ``FIN_WAIT_2`` / ``CLOSING`` / ``LAST_ACK``.
+``connection:new``
+    ``SYN_SENT`` / ``SYN_RECV`` — a handshake still in progress.
 
 Tags are deliberately resolved *before* the ordinary field search so that
 ``port:open`` never degenerates into a literal substring lookup. This module has
@@ -24,7 +30,7 @@ from __future__ import annotations
 import asyncio
 import re
 import socket
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
 import psutil
@@ -45,22 +51,35 @@ __all__ = [
 Predicate = Callable[[ResourceRecord], bool]
 
 
-def _is_open_port(record: ResourceRecord) -> bool:
-    """Bound TCP port in LISTEN state — a service waiting for connections."""
+_WAITING_STATES = frozenset({SocketState.CLOSE_WAIT, SocketState.TIME_WAIT})
+_CLOSING_STATES = frozenset(
+    {
+        SocketState.FIN_WAIT_1,
+        SocketState.FIN_WAIT_2,
+        SocketState.CLOSING,
+        SocketState.LAST_ACK,
+    }
+)
+_NEW_STATES = frozenset({SocketState.SYN_SENT, SocketState.SYN_RECV})
+
+
+def _in_states(record: ResourceRecord, states: frozenset[SocketState]) -> bool:
+    """True for a TCP socket in one of ``states`` (non-TCP sockets never match)."""
     return (
         record.is_inet
         and record.transport is TransportProtocol.TCP
-        and record.socket_state is SocketState.LISTEN
+        and record.socket_state in states
     )
+
+
+def _is_open_port(record: ResourceRecord) -> bool:
+    """Bound TCP port in LISTEN state — a service waiting for connections."""
+    return _in_states(record, frozenset({SocketState.LISTEN}))
 
 
 def _is_alive_connection(record: ResourceRecord) -> bool:
     """Established TCP socket — a connection that is actually alive."""
-    return (
-        record.is_inet
-        and record.transport is TransportProtocol.TCP
-        and record.socket_state is SocketState.ESTABLISHED
-    )
+    return _in_states(record, frozenset({SocketState.ESTABLISHED}))
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +99,24 @@ class SearchTag:
 TAGS: tuple[SearchTag, ...] = (
     SearchTag("port", "open", "TCP port in LISTEN state", _is_open_port),
     SearchTag("connection", "alive", "TCP connection in ESTABLISHED state", _is_alive_connection),
+    SearchTag(
+        "connection",
+        "waiting",
+        "CLOSE_WAIT / TIME_WAIT connection",
+        lambda record: _in_states(record, _WAITING_STATES),
+    ),
+    SearchTag(
+        "connection",
+        "closing",
+        "FIN_WAIT / CLOSING / LAST_ACK connection",
+        lambda record: _in_states(record, _CLOSING_STATES),
+    ),
+    SearchTag(
+        "connection",
+        "new",
+        "SYN_SENT / SYN_RECV handshake",
+        lambda record: _in_states(record, _NEW_STATES),
+    ),
 )
 
 # A standalone key:value / key=value token. Quoted values are supported, and a
@@ -139,64 +176,90 @@ def apply_tags(
     return found
 
 
-def _psutil_pid_sets() -> tuple[set[int], set[int]]:
+def _normalize_status(status: str | None) -> str:
+    """Canonical form for a state coming from psutil or lsof."""
+    return (status or "").upper().replace("_", "").replace("-", "")
+
+
+# psutil and lsof spell the same TCP states slightly differently; normalising
+# both lets one table drive either source.
+_STATUS_TAG = {
+    "LISTEN": "port:open",
+    "ESTABLISHED": "connection:alive",
+    "CLOSEWAIT": "connection:waiting",
+    "TIMEWAIT": "connection:waiting",
+    "FINWAIT1": "connection:closing",
+    "FINWAIT2": "connection:closing",
+    "CLOSING": "connection:closing",
+    "LASTACK": "connection:closing",
+    "SYNSENT": "connection:new",
+    "SYNRECV": "connection:new",
+}
+
+
+def _empty_pid_sets() -> dict[str, set[int]]:
+    return {tag.label: set() for tag in TAGS}
+
+
+def _collect_pid(
+    sets: dict[str, set[int]], pid: int | None, status: str | None
+) -> None:
+    if pid is None or pid <= 0:
+        return
+    label = _STATUS_TAG.get(_normalize_status(status))
+    if label is not None:
+        sets[label].add(pid)
+
+
+def _psutil_pid_sets() -> dict[str, set[int]]:
     """Fast path: one system-wide psutil call, when the OS exposes PIDs."""
-    listening: set[int] = set()
-    established: set[int] = set()
+    sets = _empty_pid_sets()
     try:
         connections = psutil.net_connections(kind="inet")
     except (psutil.AccessDenied, psutil.Error, OSError, NotImplementedError):
-        return listening, established
+        return sets
     for connection in connections:
-        if connection.pid is None or connection.pid <= 0:
-            continue
         if connection.type != socket.SOCK_STREAM:
             continue
-        status = (connection.status or "").upper()
-        if status == psutil.CONN_LISTEN:
-            listening.add(connection.pid)
-        elif status == psutil.CONN_ESTABLISHED:
-            established.add(connection.pid)
-    return listening, established
+        _collect_pid(sets, connection.pid, connection.status)
+    return sets
 
 
-async def _lsof_pid_sets() -> tuple[set[int], set[int]]:
+async def _lsof_pid_sets() -> dict[str, set[int]]:
     """macOS fallback: unprivileged psutil hides PIDs, but lsof reports them."""
+    sets = _empty_pid_sets()
+    try:
+        process = await asyncio.create_subprocess_exec(
+            "lsof",
+            "-nP",
+            "-iTCP",
+            "-FpT",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        stdout, _ = await process.communicate()
+    except (OSError, asyncio.SubprocessError):
+        return sets
 
-    async def collect(state: str) -> set[int]:
-        try:
-            process = await asyncio.create_subprocess_exec(
-                "lsof",
-                "-nP",
-                "-iTCP",
-                f"-sTCP:{state}",
-                "-Fp",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-            stdout, _ = await process.communicate()
-        except (OSError, asyncio.SubprocessError):
-            return set()
-        return {
-            int(line[1:])
-            for line in stdout.decode(errors="replace").splitlines()
-            if line.startswith("p") and line[1:].isdigit()
-        }
-
-    listening, established = await asyncio.gather(collect("LISTEN"), collect("ESTABLISHED"))
-    return listening, established
+    pid: int | None = None
+    for line in stdout.decode(errors="replace").splitlines():
+        if line.startswith("p") and line[1:].isdigit():
+            pid = int(line[1:])
+        elif line.startswith("TST=") and pid is not None:
+            _collect_pid(sets, pid, line[4:])
+    return sets
 
 
-async def network_pid_sets() -> tuple[set[int], set[int]]:
-    """Return ``(listening_pids, established_pids)`` for TCP connections.
+async def network_pid_sets() -> dict[str, set[int]]:
+    """Map each tag to the PIDs currently in its TCP state group.
 
     psutil is tried first (one cheap system-wide call). On macOS an unprivileged
-    process sees no PIDs there, so we fall back to two narrow ``lsof`` queries —
-    one per state — rather than reporting an empty, misleading result.
+    process sees no PIDs there, so we fall back to a single ``lsof`` query that
+    reports both the PID and the state of every TCP descriptor.
     """
-    listening, established = _psutil_pid_sets()
-    if listening or established:
-        return listening, established
+    sets = _psutil_pid_sets()
+    if any(sets.values()):
+        return sets
     return await _lsof_pid_sets()
 
 
@@ -206,8 +269,7 @@ ProcessPredicate = Callable[[ProcessRecord], bool]
 def split_process_tags(
     query: str,
     *,
-    listening: set[int],
-    established: set[int],
+    pids: Mapping[str, set[int]],
 ) -> tuple[str, list[ProcessPredicate]]:
     """Strip tags from a process-list query, returning PID-based predicates."""
     predicates: list[ProcessPredicate] = []
@@ -216,8 +278,8 @@ def split_process_tags(
         tag = resolve_tag(match.group("key"), match.group("value"))
         if tag is None:
             return match.group(0)
-        pids = listening if tag.key == "port" else established
-        predicates.append(lambda process, pids=pids: process.pid in pids)
+        tag_pids = pids.get(tag.label, set())
+        predicates.append(lambda process, tag_pids=tag_pids: process.pid in tag_pids)
         return " "
 
     remaining = _TAG_TOKEN.sub(replace, query or "")
