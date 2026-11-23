@@ -16,6 +16,7 @@ from ports_explorer.models import ProcessRecord
 from ports_explorer.screens.resource_browser import ResourceBrowserScreen
 from ports_explorer.services.search_tags import (
     TAGS,
+    _lsof_local_port,
     apply_tags,
     network_pid_sets,
     resolve_tag,
@@ -96,7 +97,9 @@ def test_connection_state_tags_select_the_right_states(records) -> None:
     }
     everything = [record for group in groups.values() for record in group]
 
-    assert apply_tags(everything, "port:open") == groups["LISTEN"]
+    # Every variant inherits the base record's local port, so port:open now
+    # matches all of them regardless of TCP state.
+    assert apply_tags(everything, "port:open") == everything
     assert apply_tags(everything, "c:a") == groups["ESTABLISHED"]
     assert apply_tags(everything, "c:w") == groups["waiting"]
     assert apply_tags(everything, "c:cl") == groups["closing"]
@@ -128,11 +131,12 @@ def test_split_tags_ignores_quoted_phrases() -> None:
     assert query == '"port:open"'
 
 
-def test_port_open_selects_only_listeners(records) -> None:
+def test_port_open_selects_every_bound_local_port(records) -> None:
     found = apply_tags(records, "port:open")
     assert found
-    assert all(record.state == "LISTEN" and record.protocol.upper() == "TCP" for record in found)
-    assert not any(record.state == "ESTABLISHED" for record in found)
+    assert all(record.local.port is not None for record in found)
+    # Client-only sockets have no LISTEN descriptor but do have a local port.
+    assert any(record.state == "ESTABLISHED" for record in found)
 
 
 def test_connection_alive_selects_only_established(records) -> None:
@@ -158,8 +162,10 @@ def test_tags_combine_with_free_text(records) -> None:
 
 
 def test_two_tags_are_anded(records) -> None:
-    # A socket cannot be both LISTEN and ESTABLISHED at once.
-    assert apply_tags(records, "p:o c:a") == []
+    # Established sockets have a local port, so the two tags intersect here.
+    assert apply_tags(records, "p:o c:a") == apply_tags(records, "c:a")
+    # Waiting sockets also have a local port, but no established connection.
+    assert apply_tags(records, "p:o c:w") == []
 
 
 async def test_browser_search_bar_accepts_abbreviated_tags(states_output: str) -> None:
@@ -182,22 +188,47 @@ async def test_browser_search_bar_accepts_abbreviated_tags(states_output: str) -
         assert "established" in screen._shown[0].search_blob
 
 
+@pytest.mark.parametrize(
+    ("field", "expected"),
+    [
+        ("*:80", 80),
+        ("127.0.0.1:8080", 8080),
+        ("[::1]:8443", 8443),
+        ("10.0.0.9:45000->93.184.216.34:443", 45000),
+        ("[fe80::1]:1024->[fe80::2]:1024", 1024),
+        ("*:*", None),
+        ("", None),
+    ],
+)
+def test_lsof_local_port_parsing(field: str, expected: int | None) -> None:
+    assert _lsof_local_port(field) == expected
+
+
 async def test_network_pid_sets_classifies_only_tcp_states(monkeypatch) -> None:
+    def conn(pid, status, *, kind=socket.SOCK_STREAM, port=5000):
+        return SimpleNamespace(
+            pid=pid,
+            type=kind,
+            status=status,
+            laddr=SimpleNamespace(port=port),
+        )
+
     connections = [
-        SimpleNamespace(pid=10, type=socket.SOCK_STREAM, status=psutil.CONN_LISTEN),
-        SimpleNamespace(pid=20, type=socket.SOCK_STREAM, status=psutil.CONN_ESTABLISHED),
-        SimpleNamespace(pid=20, type=socket.SOCK_STREAM, status=psutil.CONN_CLOSE_WAIT),
-        SimpleNamespace(pid=40, type=socket.SOCK_STREAM, status="FIN_WAIT1"),
-        SimpleNamespace(pid=50, type=socket.SOCK_STREAM, status="SYN_RECV"),
-        SimpleNamespace(pid=30, type=socket.SOCK_DGRAM, status=psutil.CONN_LISTEN),
-        SimpleNamespace(pid=None, type=socket.SOCK_STREAM, status=psutil.CONN_LISTEN),
+        conn(10, psutil.CONN_LISTEN),
+        conn(20, psutil.CONN_ESTABLISHED),
+        conn(20, psutil.CONN_CLOSE_WAIT),
+        conn(40, "FIN_WAIT1"),
+        conn(50, "SYN_RECV"),
+        conn(30, None, kind=socket.SOCK_DGRAM, port=8125),
+        conn(None, psutil.CONN_LISTEN),
     ]
     monkeypatch.setattr(
         "ports_explorer.services.search_tags.psutil.net_connections",
         lambda kind="inet": connections,
     )
     pids = await network_pid_sets()
-    assert pids["port:open"] == {10}
+    # Every bound local port counts, including the UDP-only PID 30.
+    assert pids["port:open"] == {10, 20, 30, 40, 50}
     assert pids["connection:alive"] == {20}
     assert pids["connection:waiting"] == {20}
     assert pids["connection:closing"] == {40}
