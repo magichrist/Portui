@@ -126,7 +126,6 @@ class Metric(Static):
 
 CATEGORIES: list[tuple[ResourceCategory, str]] = [
     (ResourceCategory.NETWORK, "Network"),
-    (ResourceCategory.LISTENERS, "Listening"),
     (ResourceCategory.FILES, "Files"),
     (ResourceCategory.UNIX, "UNIX"),
     (ResourceCategory.ALL, "All FDs"),
@@ -138,7 +137,8 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
 
     BINDINGS: ClassVar = [
         ("q", "quit_app", "Quit"),
-        ("r", "toggle_auto_update", "Auto-update"),
+        ("r", "refresh", "Reload"),
+        ("space", "toggle_auto_update", "Pause"),
         ("k", "kill_process", "Terminate"),
         ("slash", "focus_search", "Search"),
         ("ctrl+f", "focus_search", "Search"),
@@ -147,16 +147,14 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
         ("backspace", "go_back", "Back"),
         ("1", "show_tab('tab-overview')", "Overview"),
         ("2", "show_tab('tab-network')", "Network"),
-        ("3", "show_tab('tab-listeners')", "Listening"),
-        ("4", "show_tab('tab-files')", "Files"),
-        ("5", "show_tab('tab-unix')", "UNIX"),
-        ("6", "show_tab('tab-all')", "All FDs"),
+        ("3", "show_tab('tab-files')", "Files"),
+        ("4", "show_tab('tab-unix')", "UNIX"),
+        ("5", "show_tab('tab-all')", "All FDs"),
     ]
 
     TAB_ORDER: ClassVar = (
         "tab-overview",
         "tab-network",
-        "tab-listeners",
         "tab-files",
         "tab-unix",
         "tab-all",
@@ -219,17 +217,17 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
     def _end_initialisation(self) -> None:
         self._initialising = False
 
-    def _display_counts(self) -> tuple[int, int, int]:
-        """Counts derived from the deduplicated rows the user actually sees.
+    def _display_counts(self) -> tuple[int, int]:
+        """Network vs other counts from the deduplicated rows the user sees.
 
         ``CollectionResult.*_count`` counts raw lsof rows, which inflates numbers
-        when several descriptors point at the same socket. The overview and the
-        status bar must agree with the tables, so both use this helper.
+        when several descriptors point at the same socket. Network and Listening
+        are one tab now — listeners are a subset of network sockets — so there
+        is a single network count and no separate listening number.
         """
         rows = self._deduped
         return (
             sum(1 for record in rows if record.is_inet),
-            sum(1 for record in rows if record.is_listening),
             sum(1 for record in rows if not record.is_inet),
         )
 
@@ -243,7 +241,7 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
         )
 
         result = self._result
-        network, listening, other = self._display_counts()
+        network, other = self._display_counts()
         metrics: list[tuple[str, str | None, str]] = [
             ("PID", str(process.pid), current_theme().cotton),
             (
@@ -275,8 +273,7 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
                 current_theme().cotton,
             ),
             ("RUNTIME", process.elapsed, current_theme().muted),
-            ("UNIQUE NETWORK", str(network) if result else None, current_theme().cyan),
-            ("LISTENING", str(listening) if result else None, current_theme().orange),
+            ("NETWORK", str(network) if result else None, current_theme().cyan),
             ("OTHER RESOURCES", str(other) if result else None, current_theme().accent),
         ]
 
@@ -431,7 +428,7 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
         self._update_status()
         if paused:
             self.notify(
-                "Auto-update paused — press R to resume and re-collect.",
+                "Auto-update paused — press Space to resume and re-collect.",
                 severity="information",
                 timeout=3,
             )
@@ -445,7 +442,7 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
     # -- kill target ------------------------------------------------------
 
     def _default_key_hints(self) -> str:
-        return "  ←→  tabs  1-6  jump  ⏎  detail  R  auto-update  k  terminate  Q  quit  "
+        return "  ←→  tabs  1-5  jump  ⏎  detail  Space  pause  R  reload  k  terminate  Q  quit  "
 
     def _kill_target(self) -> tuple[int, str] | None:
         """This screen only ever shows one process, so the target is fixed."""
@@ -473,8 +470,8 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
         elif self._result is None:
             status.set_counts("No resources collected yet")
         else:
-            network, listening, other = self._display_counts()
-            status.set_counts(f"{network} network  ·  {listening} listening  ·  {other} other")
+            network, other = self._display_counts()
+            status.set_counts(f"{network} network  ·  {other} other")
         # A refresh must not erase a pending terminate hint: the UI would say
         # "k terminate" while the action is still armed and one more k would
         # carry it out.
@@ -575,6 +572,14 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
         if event.key == "k":
             return
         event.stop()
+        if event.key == "left":
+            tabs = self.query_one("#detail-tabs", TabbedContent)
+            # Overview is the first tab; going further left means leaving this
+            # process, exactly as Esc/Backspace do. Wrapping to "All FDs" here
+            # was surprising and trapped users on the detail screen.
+            if tabs.active == "tab-overview":
+                self.action_go_back()
+                return
         self.action_cycle_tab(1 if event.key == "right" else -1)
 
     @on(DataTable.RowSelected, "#resource-grid")
