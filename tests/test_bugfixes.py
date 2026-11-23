@@ -26,14 +26,14 @@ from ports_explorer.services.resource_search import search_resources, tokenize
 
 
 async def test_live_theme_switch_repaints_header_and_background() -> None:
-    app = PortsExplorerApp()
+    app = PortsExplorerApp(theme="ambrosia")
     async with app.run_test(size=(120, 40)) as pilot:
         for _ in range(10):
             await pilot.pause(0.1)
         background_before = app.screen.styles.background
         title = app.screen.query_one("#header-title", Static).render()
         color_before = title.spans[0].style
-        assert CATALOG.active.name == "gummy"
+        assert CATALOG.active.name == "ambrosia"
 
         app.apply_theme("daylight")
         await pilot.pause(0.2)
