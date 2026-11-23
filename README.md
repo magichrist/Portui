@@ -99,6 +99,39 @@ This is the part we actually care about.
 
 ---
 
+## ✦ How to search
+
+Any search box — the process list, the resource browser (`s` on a process), or a
+table filter (`/` inside a tab) — uses the same rules. Plain words are combined
+with **AND**, so `chrome 8080` only matches rows containing both.
+
+**Fields** accept `key=value` or `key:value`:
+
+| Field | Finds |
+|:--|:--|
+| `port=8080` / `port:8080` | Local TCP/UDP port `8080` |
+| `rport=443` | Remote port `443` |
+| `state=LISTEN` | Connection state |
+| `proto=UDP`, `proto=TCP` | Transport protocol |
+| `lip=127.0.0.1`, `rip=93.184.216.34` | Local / remote address |
+| `fd=10` | Descriptor `10` (exact number, including collapsed aliases) |
+| `user=root`, `pid=4242`, `name=nginx` | Process or resource attributes |
+
+**Tags** are shortcuts for common states. Either half can be any unambiguous
+prefix, case-insensitively, and `=` works just as well as `:`:
+
+| Tag | Also accepts | Finds |
+|:--|:--|:--|
+| `port:open` | `p:o`, `por:op`, `po:open`, `port=open` | TCP ports in `LISTEN` |
+| `connection:alive` | `c:a`, `con:ali`, `connection=alive` | TCP connections in `ESTABLISHED` |
+
+Quote a value to keep spaces together, e.g. `path="/Users/me/My Folder/file"`.
+On the main process list the state tags come from the system's TCP connections
+(`psutil`, with an `lsof` fallback on macOS); sockets owned by other users may
+need elevated privileges to be listed.
+
+---
+
 ## ✦ Keyboard
 
 <table>
