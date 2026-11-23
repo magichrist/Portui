@@ -178,10 +178,9 @@ async def test_number_keys_switch_detail_tabs() -> None:
         for key, expected in (
             ("1", "tab-overview"),
             ("2", "tab-network"),
-            ("3", "tab-listeners"),
-            ("4", "tab-files"),
-            ("5", "tab-unix"),
-            ("6", "tab-all"),
+            ("3", "tab-files"),
+            ("4", "tab-unix"),
+            ("5", "tab-all"),
         ):
             await pilot.press(key)
             await pilot.pause(0.25)
@@ -252,7 +251,7 @@ def _count_calls(screen) -> Callable[[], int]:
     return lambda: calls
 
 
-async def test_r_toggles_auto_update_on_the_detail_screen(auto_update) -> None:
+async def test_space_toggles_auto_update_on_the_detail_screen(auto_update) -> None:
     app = PortsExplorerApp()
     async with app.run_test(size=(120, 40)) as pilot:
         screen = await _push_detail_for_self(app, pilot)
@@ -260,21 +259,21 @@ async def test_r_toggles_auto_update_on_the_detail_screen(auto_update) -> None:
         assert screen.auto_update_enabled is True
 
         # First press pauses: no re-collection, and we stay put.
-        await pilot.press("r")
+        await pilot.press("space")
         await pilot.pause(1.2)
         assert isinstance(app.screen, ProcessDetailScreen)
         assert screen.auto_update_enabled is False
         assert len(screen._deduped) == before
 
         # Second press resumes and catches up with a full lsof collection.
-        await pilot.press("r")
+        await pilot.press("space")
         await pilot.pause(1.2)
         assert isinstance(app.screen, ProcessDetailScreen)
         assert screen.auto_update_enabled is True
         assert len(screen._deduped) == before
 
 
-async def test_r_toggles_auto_update_on_the_process_list(auto_update) -> None:
+async def test_space_toggles_auto_update_on_the_process_list(auto_update) -> None:
     app = PortsExplorerApp()
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause(0.6)
@@ -282,12 +281,12 @@ async def test_r_toggles_auto_update_on_the_process_list(auto_update) -> None:
         assert len(screen._all) > 0
         assert screen.auto_update_enabled is True
 
-        await pilot.press("r")
+        await pilot.press("space")
         await pilot.pause(0.4)
         assert isinstance(app.screen, ProcessListScreen)
         assert screen.auto_update_enabled is False
 
-        await pilot.press("r")
+        await pilot.press("space")
         await pilot.pause(0.8)
         assert isinstance(app.screen, ProcessListScreen)
         assert screen.auto_update_enabled is True
@@ -299,12 +298,12 @@ async def test_resuming_auto_update_recollects_resources(auto_update) -> None:
     app = PortsExplorerApp()
     async with app.run_test(size=(120, 40)) as pilot:
         screen = await _push_detail_for_self(app, pilot)
-        await pilot.press("r")
+        await pilot.press("space")
         await pilot.pause(0.4)
         assert screen.auto_update_enabled is False
 
         first = screen._result.collected_at
-        await pilot.press("r")
+        await pilot.press("space")
         await pilot.pause(1.2)
         assert screen.auto_update_enabled is True
         assert screen._result.collected_at >= first
@@ -316,7 +315,7 @@ async def test_auto_update_stops_ticking_while_paused(auto_update) -> None:
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause(0.6)
         screen = app.screen
-        await pilot.press("r")
+        await pilot.press("space")
         await pilot.pause(0.2)
         assert screen.auto_update_enabled is False
 
@@ -337,6 +336,39 @@ async def test_auto_update_ticks_when_running(auto_update) -> None:
         # set_timer would fire exactly once here; the timer must repeat.
         await pilot.pause(1.0)
         assert calls() > 1
+
+
+async def test_r_reloads_without_pausing_the_process_list(auto_update) -> None:
+    """R is now a one-shot reload; the timer keeps ticking afterwards."""
+    app = PortsExplorerApp()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause(0.6)
+        screen = app.screen
+        calls = _count_calls(screen)
+
+        await pilot.press("r")
+        await pilot.pause(0.1)  # shorter than the 0.25s test timer
+        assert screen.auto_update_enabled is True
+        assert calls() >= 1
+
+
+async def test_r_reloads_without_pausing_the_detail_screen(auto_update) -> None:
+    app = PortsExplorerApp()
+    async with app.run_test(size=(120, 40)) as pilot:
+        screen = await _push_detail_for_self(app, pilot)
+        calls = 0
+        original = screen.collect_resources
+
+        def counting(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            return original(*args, **kwargs)
+
+        screen.collect_resources = counting
+        await pilot.press("r")
+        await pilot.pause(0.1)
+        assert screen.auto_update_enabled is True
+        assert calls >= 1
 
 
 async def test_r_is_a_plain_refresh_when_auto_update_is_disabled() -> None:

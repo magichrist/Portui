@@ -106,13 +106,13 @@ async def test_detail_screen_shows_real_overview_metrics() -> None:
 
         assert "PID" in overview
         assert "RUNTIME" in overview
-        assert "UNIQUE NETWORK" in overview
-        assert "LISTENING" in overview
+        assert "NETWORK" in overview
+        assert "LISTENING" not in overview
         assert str(screen.process.pid) in overview
         assert widget_text(screen, "#command-line")
 
         tiles = list(grid.children)
-        assert len(tiles) == 12
+        assert len(tiles) == 11
         assert all(tile.render() is not None for tile in tiles)
 
 

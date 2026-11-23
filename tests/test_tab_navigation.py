@@ -30,7 +30,6 @@ async def _open_self_detail(app, pilot) -> ProcessDetailScreen:
             len(app.screen.query(table_id)) == 1
             for table_id in (
                 "#table-network",
-                "#table-listeners",
                 "#table-files",
                 "#table-unix",
                 "#table-all",
@@ -57,7 +56,7 @@ async def test_right_arrow_moves_to_the_next_tab() -> None:
 
         await pilot.press("right")
         await pilot.pause(0.2)
-        assert tabs.active == "tab-listeners"
+        assert tabs.active == "tab-files"
 
 
 async def test_left_arrow_moves_to_the_previous_tab() -> None:
@@ -66,13 +65,13 @@ async def test_left_arrow_moves_to_the_previous_tab() -> None:
         screen = await _open_self_detail(app, pilot)
         tabs = screen.query_one("#detail-tabs", TabbedContent)
 
-        await pilot.press("left")
+        await pilot.press("right")
         await pilot.pause(0.2)
-        assert tabs.active == TAB_ORDER[-1]
+        assert tabs.active == "tab-network"
 
         await pilot.press("left")
         await pilot.pause(0.2)
-        assert tabs.active == TAB_ORDER[-2]
+        assert tabs.active == "tab-overview"
 
 
 async def test_right_arrow_wraps_from_last_to_first() -> None:
@@ -87,15 +86,15 @@ async def test_right_arrow_wraps_from_last_to_first() -> None:
         assert tabs.active == "tab-overview"
 
 
-async def test_left_arrow_wraps_from_first_to_last() -> None:
+async def test_left_arrow_on_overview_exits_the_process() -> None:
+    """On the first tab, left acts like Esc and returns to the process list."""
     app = PortsExplorerApp()
     async with app.run_test(size=(120, 40)) as pilot:
-        screen = await _open_self_detail(app, pilot)
-        tabs = screen.query_one("#detail-tabs", TabbedContent)
+        await _open_self_detail(app, pilot)
 
         await pilot.press("left")
         await pilot.pause(0.2)
-        assert tabs.active == TAB_ORDER[-1]
+        assert isinstance(app.screen, ProcessListScreen)
 
 
 async def test_right_arrow_reaches_every_tab_in_order() -> None:
@@ -125,7 +124,7 @@ async def test_right_arrow_does_not_open_resource_detail() -> None:
         await pilot.press("right")
         await pilot.pause(0.3)
         assert isinstance(app.screen, ProcessDetailScreen)
-        assert app.screen.query_one("#detail-tabs", TabbedContent).active == "tab-listeners"
+        assert app.screen.query_one("#detail-tabs", TabbedContent).active == "tab-files"
 
 
 async def test_enter_opens_the_selected_resource() -> None:
@@ -153,7 +152,7 @@ async def test_enter_opens_a_resource_from_the_files_tab() -> None:
     app = PortsExplorerApp()
     async with app.run_test(size=(120, 40)) as pilot:
         screen = await _open_self_detail(app, pilot)
-        await pilot.press("4")
+        await pilot.press("3")
         await pilot.pause(0.3)
         table = screen.query_one("#table-files")
         table.focus_table()
@@ -186,7 +185,7 @@ async def test_number_keys_still_jump_directly_to_a_tab() -> None:
         screen = await _open_self_detail(app, pilot)
         tabs = screen.query_one("#detail-tabs", TabbedContent)
 
-        await pilot.press("5")
+        await pilot.press("4")
         await pilot.pause(0.2)
         assert tabs.active == "tab-unix"
 
@@ -206,11 +205,10 @@ async def test_escape_still_returns_to_the_process_list() -> None:
         assert isinstance(app.screen, ProcessListScreen)
 
 
-async def test_tab_order_covers_all_six_categories() -> None:
+async def test_tab_order_covers_all_five_categories() -> None:
     assert TAB_ORDER == (
         "tab-overview",
         "tab-network",
-        "tab-listeners",
         "tab-files",
         "tab-unix",
         "tab-all",

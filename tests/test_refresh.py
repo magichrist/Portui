@@ -44,7 +44,6 @@ async def _open_self_detail(app, pilot) -> ProcessDetailScreen:
             len(screen.query(table_id)) == 1
             for table_id in (
                 "#table-network",
-                "#table-listeners",
                 "#table-files",
                 "#table-unix",
                 "#table-all",
@@ -81,7 +80,7 @@ async def test_a_paused_timer_leaves_the_resources_alone(auto_update) -> None:
         screen = await _open_self_detail(app, pilot)
         assert screen.auto_update_enabled is True
 
-        await pilot.press("r")
+        await pilot.press("space")
         await pilot.pause(0.4)
         assert screen.auto_update_enabled is False
 

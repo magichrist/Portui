@@ -56,7 +56,7 @@ def test_detail_counts_use_deduplicated_rows() -> None:
         object(),
     )
     screen._deduped = deduplicate(raw)
-    assert screen._display_counts() == (1, 1, 0)
+    assert screen._display_counts() == (1, 0)
 
 
 # -- BUG-003 / BUG-004: search ------------------------------------------

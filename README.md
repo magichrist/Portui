@@ -7,7 +7,7 @@
 <a href="https://www.python.org/"><img alt="python" src="https://img.shields.io/badge/python-3.12%2B-B983FF?style=flat-square&labelColor=140F1B"></a>
 <a href="https://textual.textualize.io/"><img alt="textual" src="https://img.shields.io/badge/built%20with-Textual-4ECDC4?style=flat-square&labelColor=140F1B"></a>
 <a href="#license"><img alt="license" src="https://img.shields.io/badge/license-MIT-6BCB77?style=flat-square&labelColor=140F1B"></a>
-<a href="#tests"><img alt="tests" src="https://img.shields.io/badge/tests-281%20passing-FFD93D?style=flat-square&labelColor=140F1B"></a>
+<a href="#tests"><img alt="tests" src="https://img.shields.io/badge/tests-352%20passing-FFD93D?style=flat-square&labelColor=140F1B"></a>
 <img alt="macos" src="https://img.shields.io/badge/macOS%20only-FF9F43?style=flat-square&labelColor=140F1B">
 
 <br>
@@ -27,7 +27,7 @@ you the truth when it can't see something.
 ```
 ◈ PORTS EXPLORER  ·  PROCESS · NETWORK · FILES
  ← Back   Processes  ›  gvproxy · PID 5564
- Overview  Network  Listening  Files  UNIX  All FDs
+ Overview  Network  Files  UNIX  All FDs
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  FD  FAMILY  PROTO  LOCAL ENDPOINT   REMOTE ENDPOINT  STATE
   9   IPv4    TCP    127.0.0.1:60953  —                LISTEN
@@ -35,7 +35,7 @@ you the truth when it can't see something.
  21   IPv6    TCP    *:7700           —                LISTEN
  35   IPv6    TCP    *:6379           —                LISTEN
 
-26/26 shown · 2 collapsed   ● complete   1-6 tabs  R refresh  / search
+26/26 shown · 2 collapsed   ● complete   1-5 tabs  Space pause  R reload  / search
 ```
 
 ---
@@ -78,7 +78,7 @@ No `gum`. No `fzf`. No touching your `.zshrc`.
 ### ♡ Features
 
 - **Process browser** — every visible process with PID, PPID, user, CPU, memory, runtime, status and full path. Search any of it, including the complete command line. Refreshable, and your selection survives a refresh.
-- **Six focus views** — Overview, plus network connections, TCP listeners, files, UNIX sockets, and all open descriptors.
+- **Five focus views** — Overview, plus network connections (listeners included), files, UNIX sockets, and all open descriptors.
 - **Field-scoped search** — `port=8080`, `state=LISTEN`, `proto=UDP`, `rport=443`, `lip=127.0.0.1`, `fd=10`, or just words. Quote phrases for paths with spaces.
 - **Responsive** — the table sheds low-priority columns and the metric grid reflows as your terminal narrows.
 - **Six themes** — candy-bright or properly moody, switchable live with `Ctrl+T`.
@@ -149,7 +149,8 @@ need elevated privileges to be listed.
 | `←` | Back (except inside tables and inputs) |
 | `Esc` | Close the search box, then go back |
 | `/` or `Ctrl+F` | Focus search |
-| `R` | Pause / resume auto-update |
+| `R` | Reload now (one shot; auto-update keeps running) |
+| `Space` | Pause / resume auto-update |
 | `T` / `Ctrl+T` | Cycle themes / open the picker |
 | `?` | Keyboard help |
 | `Q` | Quit (when not typing) |
@@ -160,11 +161,10 @@ need elevated privileges to be listed.
 | Key | Action |
 |:--|:--|
 | `1` | Overview |
-| `2` | Network connections |
-| `3` | TCP listening ports |
-| `4` | Files and directories |
-| `5` | UNIX sockets |
-| `6` | All open descriptors |
+| `2` | Network connections and listeners |
+| `3` | Files and directories |
+| `4` | UNIX sockets |
+| `5` | All open descriptors |
 | `s` | Search all resources for this process |
 | `←` `→` | Cycle tabs |
 | `k` `k` | Terminate this process |
@@ -185,14 +185,16 @@ need elevated privileges to be listed.
 
 ### ♡ Auto-update
 
-The screen refreshes itself every 2 seconds. `R` toggles it, and the status bar
-always tells you which state you're in — so a frozen screen is never mistaken
-for a live one.
+The screen refreshes itself every 2 seconds. `Space` toggles it, and the status
+bar always tells you which state you're in — so a frozen screen is never mistaken
+for a live one. `R` is a one-shot reload: it refreshes immediately without
+pausing or changing the timer.
 
-- **Running → `R`** pauses. Status switches to `paused · R to resume`.
-- **Paused → `R`** does a full refresh and puts you back on the timer.
+- **Running → `Space`** pauses. Status switches to `paused · Space to resume`.
+- **Paused → `Space`** does a full refresh and puts you back on the timer.
+- **`R`** reloads right now, whether the timer is running or paused.
 
-One press gets you a fresh picture *and* resumes ticking.
+One press of `Space` gets you a fresh picture *and* resumes ticking.
 
 </td></tr>
 </table>
@@ -390,7 +392,7 @@ at once and storm the UI.
 ## ✦ Tests
 
 ```bash
-python3 -m pytest -q        # 281 tests
+python3 -m pytest -q        # 352 tests
 python3 -m ruff check .
 python3 -m ruff format --check .
 ```
