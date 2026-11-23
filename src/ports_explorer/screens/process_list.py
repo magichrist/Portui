@@ -27,6 +27,7 @@ from .common import (
     KillMixin,
     ResponsiveMixin,
     format_interval,
+    jump_step,
     move_cursor_by,
 )
 
@@ -406,18 +407,16 @@ class ProcessListScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[None
         Any key other than ``k`` also cancels a pending terminate, so the app
         never sits armed waiting for a confirm.
         """
-        if isinstance(self.focused, Input) and event.key in (
-            "up",
-            "down",
-            "alt+up",
-            "alt+down",
-        ):
+        step = jump_step(event.key)
+        if step is not None:
             event.stop()
             table = self.query_one("#process-grid", DataTable)
-            step = 10 if event.key.startswith("alt+") else 1
-            if event.key.endswith("up"):
-                step = -step
             move_cursor_by(table, step)
+            return
+        if isinstance(self.focused, Input) and event.key in ("up", "down"):
+            event.stop()
+            table = self.query_one("#process-grid", DataTable)
+            move_cursor_by(table, 1 if event.key == "down" else -1)
             return
         if event.key not in ("left", "k"):
             self._disarm_kill()
