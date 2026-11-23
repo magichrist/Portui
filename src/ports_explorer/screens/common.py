@@ -18,6 +18,7 @@ from ..widgets.status_bar import StatusBar
 __all__ = [
     "ARM_TIMEOUT",
     "COMPACT_WIDTH",
+    "JUMP_KEYS",
     "NARROW_WIDTH",
     "AppHeader",
     "AutoUpdateMixin",
@@ -25,6 +26,7 @@ __all__ = [
     "KillMixin",
     "ResponsiveMixin",
     "ScreenBanner",
+    "jump_step",
     "move_cursor_by",
 ]
 
@@ -39,6 +41,24 @@ ARM_TIMEOUT = 5.0
 def format_interval(seconds: float) -> str:
     """Render a refresh interval for the status bar without trailing noise."""
     return f"{seconds:g}s"
+
+
+# macOS terminals disagree about how Option+Arrow is reported: iTerm2 with
+# "Option as Meta" sends alt+down, while others fall back to ctrl+down or even
+# the Command modifier. All of them mean "jump ten rows" here.
+JUMP_KEYS: dict[str, int] = {
+    "alt+up": -10,
+    "alt+down": 10,
+    "ctrl+up": -10,
+    "ctrl+down": 10,
+    "super+up": -10,
+    "super+down": 10,
+}
+
+
+def jump_step(key: str) -> int | None:
+    """Return the row jump for ``key``, or ``None`` if it is not a jump key."""
+    return JUMP_KEYS.get(key)
 
 
 def move_cursor_by(table: Any, step: int) -> None:
