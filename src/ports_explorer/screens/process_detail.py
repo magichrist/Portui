@@ -16,7 +16,7 @@ from textual.screen import Screen
 from textual.widgets import Button, DataTable, Input, Static, TabbedContent, TabPane
 
 from ..collectors.lsof import LsofCollector
-from ..config import current_theme, get_settings, with_tokens
+from ..config import current_theme, get_settings
 from ..models import (
     CollectionResult,
     PermissionState,
@@ -46,26 +46,6 @@ __all__ = ["ProcessDetailScreen"]
 
 class MetricGrid(Container):
     """Grid of :class:`Metric` tiles, rebuilt whenever metrics change."""
-
-    DEFAULT_CSS = with_tokens(
-        """
-    MetricGrid {
-        layout: grid;
-        grid-size: 4;
-        grid-columns: 1fr 1fr;
-        grid-rows: 2;
-        grid-gutter: 0 2;
-        height: auto;
-        margin: 0 0 1 0;
-    }
-    MetricGrid.-compact {
-        grid-size: 2;
-    }
-    MetricGrid.-narrow {
-        grid-size: 1;
-    }
-    """
-    )
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -112,28 +92,6 @@ class Metric(Static):
     A value of ``None`` renders as an explicit *unavailable* marker, which is
     deliberately styled differently from a real value of zero.
     """
-
-    DEFAULT_CSS = with_tokens(
-        """
-    Metric {
-        height: 2;
-        padding: 0 1;
-        border-left: thick $purple;
-        background: $surface-alt;
-        content-align: left middle;
-        overflow: hidden;
-    }
-    Metric .metric-label {
-        color: $muted;
-    }
-    Metric .metric-value {
-        text-style: bold;
-    }
-    Metric.-missing {
-        border-left: thick $muted;
-    }
-    """
-    )
 
     def __init__(self, label: str, value: str | None, style: str, **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -203,18 +161,6 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
         "tab-unix",
         "tab-all",
     )
-
-    DEFAULT_CSS = with_tokens("""
-    ProcessDetailScreen {
-        height: 1fr;
-    }
-    ProcessDetailScreen #detail-tabs {
-        height: 1fr;
-    }
-    ProcessDetailScreen #overview-pane {
-        padding: 0 1;
-    }
-    """)
 
     def __init__(
         self,
@@ -290,7 +236,10 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
     def render_overview(self) -> None:
         process = self.process
         self.query_one("#detail-title", Static).update(
-            Text(f"{process.name}  ·  PID {process.pid}", style=f"bold {current_theme().coral}")
+            Text(
+                f"{process.name}  ·  PID {process.pid}",
+                style=f"bold {current_theme().header_color}",
+            )
         )
 
         result = self._result
@@ -328,7 +277,7 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
             ("RUNTIME", process.elapsed, current_theme().muted),
             ("UNIQUE NETWORK", str(network) if result else None, current_theme().cyan),
             ("LISTENING", str(listening) if result else None, current_theme().orange),
-            ("OTHER RESOURCES", str(other) if result else None, current_theme().purple),
+            ("OTHER RESOURCES", str(other) if result else None, current_theme().accent),
         ]
 
         grid = self.query_one("#metric-grid", MetricGrid)
@@ -344,7 +293,7 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
         note.remove_class("-error")
 
         if result is None:
-            note.update(Text("◌ Collecting resources…", style=current_theme().purple))
+            note.update(Text("◌ Collecting resources…", style=current_theme().accent))
             return
 
         lines: list[Text] = []
@@ -361,7 +310,7 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
         warning = result.warning()
         if warning:
             note.add_class("-error")
-            lines.append(Text(f"\n⚠  {warning}", style=current_theme().coral))
+            lines.append(Text(f"\n⚠  {warning}", style=current_theme().danger))
 
         if result.issues:
             lines.append(
@@ -423,7 +372,7 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
     def _show_collection_failure(self, message: str) -> None:
         note = self.query_one("#collection-note", Static)
         note.add_class("-error")
-        note.update(Text(f"⚠  Collection failed: {message}", style=current_theme().coral))
+        note.update(Text(f"⚠  Collection failed: {message}", style=current_theme().danger))
         self._result = CollectionResult(permission=PermissionState.FAILED, error=message)
         self.render_overview()
         self._update_status()
@@ -503,8 +452,13 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
         return self.process.pid, f"{self.process.name} (PID {self.process.pid})"
 
     def _after_kill(self, result: Any) -> None:
-        """Return to the list once the process this screen describes is gone."""
-        if result.ok:
+        """Return to the list once the process this screen describes is gone.
+
+        Kill workers live at app scope so they survive navigation. If the user
+        already left this screen, popping again would remove the process list
+        and leave a blank app.
+        """
+        if result.ok and self.is_mounted and self.app.screen is self:
             self.app.pop_screen()
 
     def _update_status(self) -> None:
@@ -521,7 +475,13 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
         else:
             network, listening, other = self._display_counts()
             status.set_counts(f"{network} network  ·  {listening} listening  ·  {other} other")
-        status.set_keys(self._default_key_hints())
+        # A refresh must not erase a pending terminate hint: the UI would say
+        # "k terminate" while the action is still armed and one more k would
+        # carry it out.
+        if self._kill_armed_pid is None:
+            status.set_keys(self._default_key_hints())
+        else:
+            self._render_kill_hint()
         if self._result is not None:
             status.set_collection(self._result)
 
@@ -597,6 +557,10 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
         table = self._active_table()
         if table is not None:
             table.focus_table()
+            # Counts are per table; refresh them so the status line follows the
+            # tab the user just selected instead of the last hidden tab that
+            # happened to populate.
+            table.refresh_count()
 
     def on_key(self, event: Any) -> None:
         """Left/Right cycle the category tabs; Enter opens the selected row.
@@ -631,6 +595,12 @@ class ProcessDetailScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[No
 
     def on_resource_table_record_count_changed(self, message: Any) -> None:
         message.stop()
+        # All five tables repopulate on every collection and each posts this
+        # message. Only the active tab's counts belong in the status bar;
+        # otherwise the last hidden table always wins.
+        active = self._active_table()
+        if active is None or message.control is not active:
+            return
         status = self.query_one("#status-bar", StatusBar)
         status.set_counts(
             f"{message.shown}/{message.total} shown  ·  {self._collapsed} collapsed"
