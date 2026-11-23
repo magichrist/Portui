@@ -24,7 +24,7 @@ from ..services.resource_search import (
 )
 from ..services.search_tags import split_tags
 from ..widgets.status_bar import StatusBar
-from .common import AppHeader, EmptyState, ResponsiveMixin, ScreenBanner
+from .common import AppHeader, EmptyState, ResponsiveMixin, ScreenBanner, move_cursor_by
 
 log = logging.getLogger(__name__)
 
@@ -226,7 +226,10 @@ class ResourceBrowserScreen(ResponsiveMixin, Screen[None]):
     @on(Input.Submitted, "#browser-search")
     def _on_submitted(self, event: Input.Submitted) -> None:
         event.stop()
-        self.query_one("#browser-grid", DataTable).focus()
+        table = self.query_one("#browser-grid", DataTable)
+        table.focus()
+        if table.row_count:
+            table.action_select_cursor()
 
     @on(DataTable.RowSelected, "#browser-grid")
     def _on_selected(self, event: DataTable.RowSelected) -> None:
@@ -249,6 +252,20 @@ class ResourceBrowserScreen(ResponsiveMixin, Screen[None]):
         return self._shown[row]
 
     def on_key(self, event: Any) -> None:
+        # While typing, ↑/↓ move the result highlight without leaving the input.
+        if isinstance(self.focused, Input) and event.key in (
+            "up",
+            "down",
+            "alt+up",
+            "alt+down",
+        ):
+            event.stop()
+            table = self.query_one("#browser-grid", DataTable)
+            step = 10 if event.key.startswith("alt+") else 1
+            if event.key.endswith("up"):
+                step = -step
+            move_cursor_by(table, step)
+            return
         if event.key != "right":
             return
         if isinstance(self.focused, DataTable):
