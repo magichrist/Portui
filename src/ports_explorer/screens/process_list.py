@@ -18,6 +18,7 @@ from ..collectors.processes import ProcessCollector
 from ..config import current_theme, get_settings
 from ..models import ProcessRecord, format_bytes, format_percent
 from ..services.resource_search import search_processes
+from ..services.search_tags import network_pid_sets, split_process_tags
 from ..widgets.status_bar import StatusBar
 from .common import (
     AppHeader,
@@ -67,12 +68,17 @@ class ProcessListScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[None
         self._cursor_pid: int | None = None
         self._loading = False
         self._first_load = True
+        # PIDs with a listening TCP port / an established TCP connection. Filled
+        # by each collection pass so the search bar can answer `port:open` and
+        # `connection:alive` for processes without running lsof per process.
+        self._listening_pids: set[int] = set()
+        self._established_pids: set[int] = set()
 
     def compose(self) -> ComposeResult:
         yield AppHeader(id="app-header")
         with Horizontal(id="process-search-row"):
             yield Input(
-                placeholder="Search name, PID, user, path or command…",
+                placeholder="Search…  port:open  connection:alive  name  PID  user  path",
                 id="process-search",
             )
         yield DataTable(id="process-grid", zebra_stripes=True, cursor_type="row")
@@ -172,6 +178,7 @@ class ProcessListScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[None
             return
 
         self._all = processes
+        self._listening_pids, self._established_pids = await network_pid_sets()
         self.collector.store(processes)
         self._loading = False
         self._apply_query()
@@ -189,7 +196,15 @@ class ProcessListScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[None
 
     def _apply_query(self) -> None:
         query = self._current_query()
-        self._filtered = search_processes(self._all, query)
+        remaining, predicates = split_process_tags(
+            query,
+            listening=self._listening_pids,
+            established=self._established_pids,
+        )
+        candidates = [
+            process for process in self._all if all(predicate(process) for predicate in predicates)
+        ]
+        self._filtered = search_processes(candidates, remaining)
         self._populate()
 
     def _current_query(self) -> str:
