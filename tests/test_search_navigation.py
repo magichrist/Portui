@@ -102,6 +102,30 @@ async def test_alt_arrows_jump_ten_rows_with_table_focused() -> None:
         assert table.cursor_row == 0
 
 
+async def test_terminal_escape_arrow_pair_jumps_ten_rows() -> None:
+    """macOS terminals report Option+Arrow as an escape followed by an arrow."""
+    app = PortsExplorerApp()
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause(0.7)
+        screen = app.screen
+        table = screen.query_one("#process-grid", DataTable)
+        assert table.row_count >= 12
+        table.move_cursor(row=0)
+        table.focus()
+        await pilot.pause()
+
+        await pilot.press("escape")
+        await pilot.press("down")
+        await pilot.pause()
+        assert table.cursor_row == 10
+        assert isinstance(app.screen, type(screen))
+
+        await pilot.press("escape")
+        await pilot.press("up")
+        await pilot.pause()
+        assert table.cursor_row == 0
+
+
 async def test_browser_search_arrows_move_highlight_without_leaving_input() -> None:
     records, _ = parse_lsof_output(load_fixture("lsof_states.txt"))
     app = PortsExplorerApp()
