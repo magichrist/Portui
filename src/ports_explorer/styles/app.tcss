@@ -1,12 +1,19 @@
 /* ==========================================================================
-   Ports Explorer — design system
-   Coral = emphasis, cyan = network, lime = healthy/established,
-   amber = listening/warning, purple = navigation, muted = metadata.
+   Ports Explorer — Female Cyber Space design system (TUI-Maker)
 
-   Theme colors are supplied dynamically by App.get_css_variables(). Never
-   declare $token: #hex; here (or in with_tokens()): Textual appends CSS values
-   to the app variables, so a baked declaration would shadow the active palette
-   and make live theme switching impossible.
+   ALL styling lives here. Widget-level `DEFAULT_CSS` is deliberately avoided:
+   Textual only reliably applies App CSS, so this file is the single source of
+   truth for layout and colour. Use the $role-* variables for semantics:
+
+     $role-border   GUMMY_PINK   borders / dividers only (reads red as text)
+     $role-accent   LIGHT_PINK   hints, labels and pink text
+     $role-focus    AMBER        focused input border, warning accents
+     $role-header   PHOSPHOR     panel headers, names, success
+     $role-selection YELLOW      selected row / active text
+     $role-hover    HOVER_BG     hovered row
+
+   The base palette comes from App.get_css_variables(); never bake a hex value
+   into this file, or live theme switching will stop working.
    ========================================================================== */
 
 Screen {
@@ -19,7 +26,7 @@ Screen {
 #app-header {
     dock: top;
     height: 1;
-    background: $surface-alt;
+    background: $surface-raised;
 }
 
 #header-title {
@@ -32,7 +39,7 @@ Screen {
     width: auto;
     padding: 0 2;
     content-align: right middle;
-    color: $muted;
+    color: $role-accent;
 }
 
 /* ── Banner (breadcrumb + back button) ──────────────────────────────── */
@@ -49,18 +56,18 @@ Screen {
     margin: 0 0 0 1;
     padding: 0 1;
     background: $surface-raised;
-    color: $purple;
+    color: $role-accent;
     text-style: bold;
     border: none;
 }
 
 #back-button:hover {
-    background: $purple;
+    background: $secondary;
     color: $surface;
 }
 
 #back-button:focus {
-    background: $purple;
+    background: $secondary;
     color: $surface;
     text-style: bold;
 }
@@ -73,18 +80,14 @@ Screen {
 
 /* ── Search ─────────────────────────────────────────────────────────── */
 
-#process-search {
-    width: 1fr;
-}
-
 Input {
     background: $surface-alt;
-    border: tall $surface-raised;
+    border: tall $role-border;
     color: $cotton;
 }
 
 Input:focus {
-    border: tall $purple;
+    border: tall $role-focus;
 }
 
 Input > .input--placeholder {
@@ -99,19 +102,20 @@ DataTable {
 }
 
 DataTable > .datatable--header {
-    background: $surface-alt;
-    color: $purple;
+    background: $surface-raised;
+    color: $role-header;
     text-style: bold;
 }
 
 DataTable > .datatable--cursor {
-    background: $purple 35%;
-    color: $cotton;
-    text-style: none;
+    background: $surface-raised;
+    color: $role-selection;
+    text-style: bold;
 }
 
 DataTable > .datatable--hover {
-    background: $surface-raised;
+    background: $role-hover;
+    color: $role-selection;
 }
 
 DataTable > .datatable--odd-row {
@@ -127,16 +131,113 @@ DataTable > .datatable--even-row {
 StatusBar {
     dock: bottom;
     height: 1;
+    background: $surface-alt;
+    color: $muted;
+}
+
+StatusBar #status-counts {
+    width: 1fr;
+    padding: 0 2;
+}
+
+StatusBar #status-health {
+    width: auto;
+    padding: 0 2;
+}
+
+StatusBar #status-keys {
+    width: auto;
+    padding: 0 2;
+}
+
+HealthBadge {
+    height: 1;
+    padding: 0 1;
+    content-align: left middle;
+}
+
+/* ── Process list ───────────────────────────────────────────────────── */
+
+ProcessListScreen {
+    height: 1fr;
+}
+
+ProcessListScreen #process-search-row {
+    height: 3;
+    padding: 0 1;
+}
+
+ProcessListScreen.-narrow #process-grid {
+    scrollbar-size-vertical: 1;
+}
+
+ProcessListScreen #process-empty {
+    display: none;
+}
+
+ProcessListScreen.-empty #process-empty {
+    display: block;
 }
 
 /* ── Process detail ─────────────────────────────────────────────────── */
+
+ProcessDetailScreen {
+    height: 1fr;
+}
+
+ProcessDetailScreen #detail-tabs {
+    height: 1fr;
+}
+
+ProcessDetailScreen #overview-pane {
+    padding: 0 1;
+}
 
 #detail-title {
     height: auto;
     margin: 0 0 1 0;
     padding: 0 1;
-    color: $coral;
+    color: $role-header;
     text-style: bold;
+}
+
+MetricGrid {
+    layout: grid;
+    grid-size: 4;
+    grid-columns: 1fr 1fr;
+    grid-rows: 2;
+    grid-gutter: 0 2;
+    height: auto;
+    margin: 0 0 1 0;
+}
+
+MetricGrid.-compact {
+    grid-size: 2;
+}
+
+MetricGrid.-narrow {
+    grid-size: 1;
+}
+
+Metric {
+    height: 2;
+    padding: 0 1;
+    border-left: thick $role-border;
+    background: $surface-alt;
+    content-align: left middle;
+    overflow: hidden;
+}
+
+Metric .metric-label {
+    color: $role-accent;
+}
+
+Metric .metric-value {
+    text-style: bold;
+}
+
+Metric.-missing {
+    border-left: thick $muted;
 }
 
 #command-line {
@@ -144,7 +245,7 @@ StatusBar {
     max-height: 8;
     padding: 1 2;
     margin: 0 0 1 0;
-    border: round $caramel;
+    border: round $role-border;
     background: $surface-alt;
     color: $cotton;
 }
@@ -153,13 +254,43 @@ StatusBar {
     height: auto;
     padding: 0 1;
     margin: 0 0 1 0;
-    border-left: thick $amber;
-    color: $amber;
+    border-left: thick $role-focus;
+    color: $role-focus;
 }
 
 #collection-note.-error {
-    border-left: thick $coral;
-    color: $coral;
+    border-left: thick $danger;
+    color: $danger;
+}
+
+/* ── Reusable resource table ────────────────────────────────────────── */
+
+ResourceTable {
+    height: 1fr;
+}
+
+ResourceTable > .resource-search {
+    height: 3;
+    margin: 0 0 1 0;
+    display: none;
+}
+
+ResourceTable.-searching > .resource-search {
+    display: block;
+}
+
+ResourceTable DataTable {
+    height: 1fr;
+}
+
+ResourceTable .resource-empty {
+    height: auto;
+    padding: 1 2;
+    display: none;
+}
+
+ResourceTable.-empty .resource-empty {
+    display: block;
 }
 
 /* ── Empty / error states ───────────────────────────────────────────── */
@@ -170,15 +301,60 @@ StatusBar {
     padding: 2 4;
 }
 
-/* ── Detail card (single resource) ──────────────────────────────────── */
+/* ── Resource browser / detail ──────────────────────────────────────── */
+
+ResourceBrowserScreen {
+    height: 1fr;
+}
+
+ResourceBrowserScreen #browser-search-row {
+    height: 3;
+    padding: 0 1;
+}
+
+ResourceBrowserScreen #browser-empty {
+    display: none;
+}
+
+ResourceBrowserScreen.-empty #browser-empty {
+    display: block;
+}
+
+ResourceDetailScreen {
+    height: 1fr;
+}
 
 #resource-detail {
     height: 1fr;
-    border: round $purple;
+    border: round $role-border;
     background: $surface-alt;
     margin: 0 2 1 2;
     padding: 1 2;
     overflow-y: auto;
+}
+
+/* ── Theme picker ───────────────────────────────────────────────────── */
+
+ThemeSwatch {
+    height: 1;
+    margin: 0 0 1 0;
+}
+
+ThemePickerScreen {
+    height: 1fr;
+}
+
+ThemePickerScreen #theme-preview {
+    height: auto;
+    margin: 0 2 1 2;
+    padding: 1 2;
+    border: round $role-border;
+    background: $surface-alt;
+}
+
+ThemePickerScreen #theme-preview-name {
+    color: $role-header;
+    text-style: bold;
 }
 
 /* ── Tabs / categories ──────────────────────────────────────────────── */
@@ -196,12 +372,12 @@ Tab {
 }
 
 Tab.-active {
-    color: $coral;
+    color: $role-header;
     text-style: bold;
 }
 
 Underline > .underline--bar {
-    color: $coral;
+    color: $role-border;
 }
 
 /* ── Footer ─────────────────────────────────────────────────────────── */
@@ -211,19 +387,19 @@ Footer {
 }
 
 Footer > .footer-key--key {
-    background: $purple;
+    background: $secondary;
     color: $surface;
 }
 
 Footer > .footer-key--description {
-    background: $surface-raised;
+    background: $surface-alt;
     color: $cotton;
 }
 
 /* ── Responsive ──────────────────────────────────────────────────────────
    Textual's TCSS has no @media support, so the app toggles the classes below
    from on_resize handlers in screens/common.py:ResponsiveMixin. The metric
-   grid handles -compact / -narrow in its own DEFAULT_CSS. Breakpoints:
+   grid handles -compact / -narrow in its own block above. Breakpoints:
    -compact below 100 columns, -narrow below 76 columns.                    */
 
 .-compact #header-subtitle {
