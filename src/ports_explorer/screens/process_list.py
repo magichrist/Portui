@@ -68,11 +68,10 @@ class ProcessListScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[None
         self._cursor_pid: int | None = None
         self._loading = False
         self._first_load = True
-        # PIDs with a listening TCP port / an established TCP connection. Filled
-        # by each collection pass so the search bar can answer `port:open` and
-        # `connection:alive` for processes without running lsof per process.
-        self._listening_pids: set[int] = set()
-        self._established_pids: set[int] = set()
+        # PIDs per semantic tag, filled by each collection pass so the search
+        # bar can answer `port:open` / `connection:*` without running lsof per
+        # process.
+        self._tag_pids: dict[str, set[int]] = {}
 
     def compose(self) -> ComposeResult:
         yield AppHeader(id="app-header")
@@ -178,7 +177,7 @@ class ProcessListScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[None
             return
 
         self._all = processes
-        self._listening_pids, self._established_pids = await network_pid_sets()
+        self._tag_pids = await network_pid_sets()
         self.collector.store(processes)
         self._loading = False
         self._apply_query()
@@ -196,11 +195,7 @@ class ProcessListScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[None
 
     def _apply_query(self) -> None:
         query = self._current_query()
-        remaining, predicates = split_process_tags(
-            query,
-            listening=self._listening_pids,
-            established=self._established_pids,
-        )
+        remaining, predicates = split_process_tags(query, pids=self._tag_pids)
         candidates = [
             process for process in self._all if all(predicate(process) for predicate in predicates)
         ]
