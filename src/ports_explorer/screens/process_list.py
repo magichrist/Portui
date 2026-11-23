@@ -51,7 +51,8 @@ class ProcessListScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[None
 
     BINDINGS: ClassVar = [
         ("q", "quit_app", "Quit"),
-        ("r", "toggle_auto_update", "Auto-update"),
+        ("r", "refresh", "Reload"),
+        ("space", "toggle_auto_update", "Pause"),
         ("k", "kill_process", "Terminate"),
         ("slash", "focus_search", "Search"),
         ("ctrl+f", "focus_search", "Search"),
@@ -84,7 +85,7 @@ class ProcessListScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[None
         yield EmptyState(
             "No processes found",
             "Nothing matched the current search.",
-            "Press  R  to toggle auto-update, or Esc to clear the search.",
+            "Press  R  to reload, or Esc to clear the search.",
             id="process-empty",
             classes="empty-state",
         )
@@ -134,7 +135,7 @@ class ProcessListScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[None
             self._apply_column_widths()
 
     def _default_key_hints(self) -> str:
-        return "  /  search    R  auto-update    ⏎  inspect    k  terminate    Q  quit  "
+        return "  /  search    Space  pause    R  reload    ⏎  inspect    k  terminate    Q  quit  "
 
     def set_key_hints(self) -> None:
         with suppress(Exception):
@@ -313,7 +314,7 @@ class ProcessListScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[None
         self._update_status()
         if paused:
             self.notify(
-                "Auto-update paused — press R to resume.",
+                "Auto-update paused — press Space to resume.",
                 severity="information",
                 timeout=3,
             )
@@ -338,7 +339,7 @@ class ProcessListScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[None
 
     def action_show_help(self) -> None:
         self.notify(
-            "↑↓ navigate  ⏎ inspect  / search  R toggle auto-update  "
+            "↑↓ navigate  ⏎ inspect  / search  R reload  Space pause/resume  "
             "k k terminate  Esc clear  Q quit",
             title="Keyboard",
             severity="information",
