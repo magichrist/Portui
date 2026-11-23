@@ -135,14 +135,19 @@ class ProcessCollector:
         self._cache: list[ProcessRecord] = []
         self._cache_time: float = 0.0
         self._detail_samples: dict[int, _DetailSample] = {}
+        # (pid, create_time) identities whose CPU counter has a baseline. Using
+        # create_time as part of the key means a recycled PID is primed again
+        # instead of inheriting a baseline from the process that used to own it.
+        self._primed_pids: set[tuple[int, float | None]] = set()
 
     def prime(self) -> None:
         """Prime psutil's CPU counters without blocking the event loop."""
-        for process in psutil.process_iter(["pid"]):
+        for process in psutil.process_iter(["pid", "create_time"]):
             try:
                 process.cpu_percent(interval=None)
             except (psutil.NoSuchProcess, psutil.AccessDenied, OSError):
                 continue
+            self._primed_pids.add((process.pid, _safe(process.create_time)))
         self._primed = True
 
     def snapshot_blocking(self) -> list[ProcessRecord]:
@@ -151,17 +156,31 @@ class ProcessCollector:
             self.prime()
 
         records: list[ProcessRecord] = []
-        for process in psutil.process_iter(["pid", "name"]):
+        current_identities: set[tuple[int, float | None]] = set()
+        for process in psutil.process_iter(["pid", "name", "create_time"]):
             try:
                 if process.pid <= 0:
                     continue
-                records.append(process_to_record(process))
+                identity = (process.pid, _safe(process.create_time))
+                current_identities.add(identity)
+                if self._prime_cpu and identity not in self._primed_pids:
+                    # A process first seen in a later snapshot has no baseline
+                    # on this handle: psutil's first cpu_percent() call returns
+                    # a meaningless 0.0. Prime it now and report *unavailable*
+                    # for this tick, matching the detail path's first sighting.
+                    _safe(process.cpu_percent)
+                    self._primed_pids.add(identity)
+                    records.append(process_to_record(process, cpu_percent=None))
+                else:
+                    records.append(process_to_record(process))
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, OSError):
                 continue
             except Exception:
                 # psutil races (NoSuchProcess/AccessDenied/Zombie) are expected
                 # and handled above; anything else is a bug we must not bury.
                 log.warning("unexpected error collecting process %s", process.pid, exc_info=True)
+        # Sweep lazily so the set cannot grow without bound as processes churn.
+        self._primed_pids.intersection_update(current_identities)
         records.sort(key=lambda record: record.pid)
         return records
 

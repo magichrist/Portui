@@ -379,7 +379,9 @@ class LsofCollector:
             issues=issues,
         )
 
-        if permission is PermissionState.FAILED and not records:
+        if permission is PermissionState.FAILED:
+            # Surface the cause even when lsof emitted rows before failing,
+            # otherwise warning() returns None and the failure is invisible.
             result.error = _first_error_line(stderr) or f"lsof exited with status {return_code}"
         return result
 
@@ -408,20 +410,24 @@ def _classify_permission(
     denied_markers = ("permission denied", "can't be accessed", "cannot be accessed")
     has_denial = any(marker in lowered for marker in denied_markers)
 
-    if return_code not in (0, 1) and not records:
+    # A fatal exit invalidates the inventory even when lsof managed to emit a
+    # few rows before failing; never report those as a complete collection.
+    if return_code not in (0, 1):
         return PermissionState.FAILED
+    # Liveness is authoritative. A PID that is gone is gone even if stderr
+    # happened to mention a permission problem on an unrelated path.
+    if not records and not process_exists:
+        return PermissionState.GONE
     if has_denial and records:
         return PermissionState.PARTIAL
     if has_denial:
         return PermissionState.DENIED
     if not records:
-        if not process_exists:
-            return PermissionState.GONE
         # Exit 1 with no rows and no stderr is how macOS lsof reports a live
         # process it cannot read (the documented permission case). Exit 0 is
         # different: lsof succeeded and honestly found no descriptors, so an
         # empty inventory must not be dressed up as "permission denied".
-        if has_denial or return_code == 1:
+        if return_code == 1:
             return PermissionState.DENIED
         return PermissionState.OK
     if return_code == 1:
