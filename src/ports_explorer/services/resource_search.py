@@ -26,7 +26,7 @@ __all__ = [
 # matters: the key=value alternative must be tried first so ``path="/a b"``
 # becomes one token instead of three.
 _TOKEN = re.compile(
-    r'(?P<key>[a-zA-Z]+)=(?P<value>"[^"]*"|\S+)'
+    r'(?P<key>[a-zA-Z]+)(?P<sep>[:=])(?P<value>"[^"]*"|\S+)'
     r'|(?P<phrase>"[^"]*")'
     r"|(?P<bare>\S+)"
 )
@@ -50,6 +50,11 @@ _SUPPORTED_KEYS = frozenset(
         "path",
     }
 )
+
+# Keys that may appear on either side of the app (resource fields plus the
+# process-list fields). Used only to decide whether ``key:value`` is a field
+# filter or plain text such as a URL / Windows path.
+_FIELD_KEYS = _SUPPORTED_KEYS | {"ppid", "exe", "status", "cmdline", "family", "listen"}
 
 
 class _Token(str):
@@ -79,16 +84,24 @@ def tokenize(query: str) -> list[str]:
 
     Quotes are stripped from the returned tokens so a phrase matches the same
     text a user sees in the table. Quoting a *field value* works too:
-    ``path="/Users/me/My Folder/file"`` is one token, not four.
+    ``path="/Users/me/My Folder/file"`` is one token, not four. Both ``=`` and
+    ``:`` are accepted as field separators; field tokens are normalised to ``=``
+    so every downstream matcher sees one spelling. A colon after an unsupported
+    key (a URL or a Windows path, say) is left as plain text.
     """
     tokens: list[str] = []
     for match in _TOKEN.finditer(query or ""):
         if match.group("key") is not None:
+            key = match.group("key")
             value = match.group("value")
             if len(value) >= 2 and value.startswith('"') and value.endswith('"'):
                 value = value[1:-1]
-            if value:
-                tokens.append(_Token(f"{match.group('key')}={value}"))
+            if not value:
+                continue
+            separator = "="
+            if match.group("sep") == ":" and key.lower() not in _FIELD_KEYS:
+                separator = ":"
+            tokens.append(_Token(f"{key}{separator}{value}"))
         elif match.group("phrase") is not None:
             phrase = match.group("phrase")[1:-1]
             if phrase:
@@ -265,18 +278,56 @@ def search_resources(
     return results
 
 
+def _process_field_hits(process: ProcessRecord, key: str, value: str) -> bool:
+    match key:
+        case "pid":
+            return value.isdigit() and process.pid == int(value)
+        case "ppid":
+            return value.isdigit() and process.ppid == int(value)
+        case "user":
+            return value in (process.user or "").lower()
+        case "name":
+            return value in process.name.lower()
+        case "exe":
+            return value in (process.exe or "").lower()
+        case "status":
+            return value in (process.status or "").lower()
+        case _:
+            return value in process.search_blob
+
+
 def search_processes(
     processes: Sequence[ProcessRecord],
     query: str,
 ) -> list[ProcessRecord]:
-    """Search by name, PID, PPID, username, exe and full command line."""
+    """Search by free text and by documented ``key=value`` / ``key:value`` fields.
+
+    Free tokens are ANDed with field tokens, matching the resource search rules
+    described in the README. Quoted phrases stay literal via :class:`_Token`.
+    """
     tokens = tokenize(query)
     if not tokens:
         return list(processes)
 
+    free_tokens = [token for token in tokens if not _is_field_token(token)]
+    field_tokens = [token for token in tokens if _is_field_token(token)]
+
     results: list[ProcessRecord] = []
     for process in processes:
         blob = process.search_blob
-        if all(token.lower() in blob for token in tokens):
-            results.append(process)
+        if free_tokens and not all(token.lower() in blob for token in free_tokens):
+            continue
+        if field_tokens:
+            matches = True
+            for token in field_tokens:
+                key_match = _KV.match(token)
+                assert key_match is not None  # _is_field_token already checked
+                key = key_match.group("key").lower()
+                value = key_match.group("value").strip().lower().strip('"')
+                if not _process_field_hits(process, key, value):
+                    matches = False
+                    break
+            if not matches:
+                continue
+        results.append(process)
     return results

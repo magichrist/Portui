@@ -137,6 +137,11 @@ class ProcessListScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[None
         with suppress(Exception):
             self._apply_column_widths()
 
+    def refresh_content(self) -> None:
+        """Repaint inline-styled cells with the currently active palette."""
+        with suppress(Exception):
+            self._populate()
+
     def _default_key_hints(self) -> str:
         return "  /  search    Space  pause    R  reload    ⏎  inspect    k  terminate    Q  quit  "
 
@@ -239,13 +244,13 @@ class ProcessListScreen(ResponsiveMixin, AutoUpdateMixin, KillMixin, Screen[None
                 self.query_one("#process-empty", EmptyState).set_content(
                     "No processes visible",
                     "The operating system returned an empty process list.",
-                    "Check permissions, then press R to toggle auto-update and retry.",
+                    "Check permissions, then press Space to toggle auto-update and retry.",
                 )
             else:
                 self.query_one("#process-empty", EmptyState).set_content(
                     "No processes found",
                     "Nothing matched the current search.",
-                    "Press  Esc  to clear the search, or R to toggle auto-update.",
+                    "Press  Esc  to clear the search, or Space to toggle auto-update.",
                 )
         else:
             self.remove_class("-empty")

@@ -16,6 +16,7 @@ from ports_explorer.models import ProcessRecord
 from ports_explorer.screens.resource_browser import ResourceBrowserScreen
 from ports_explorer.services.search_tags import (
     TAGS,
+    _empty_pid_sets,
     _lsof_local_port,
     apply_tags,
     network_pid_sets,
@@ -226,6 +227,11 @@ async def test_network_pid_sets_classifies_only_tcp_states(monkeypatch) -> None:
         "ports_explorer.services.search_tags.psutil.net_connections",
         lambda kind="inet": connections,
     )
+
+    async def no_lsof() -> dict[str, set[int]]:
+        return _empty_pid_sets()
+
+    monkeypatch.setattr("ports_explorer.services.search_tags._lsof_pid_sets", no_lsof)
     pids = await network_pid_sets()
     # Every bound local port counts, including the UDP-only PID 30.
     assert pids["port:open"] == {10, 20, 30, 40, 50}
@@ -245,10 +251,10 @@ async def test_network_pid_sets_falls_back_to_lsof_on_macos(monkeypatch) -> None
         return {"port:open": {101}, "connection:alive": {202}}
 
     monkeypatch.setattr("ports_explorer.services.search_tags._lsof_pid_sets", fake_lsof)
-    assert await network_pid_sets() == {
-        "port:open": {101},
-        "connection:alive": {202},
-    }
+    expected = _empty_pid_sets()
+    expected["port:open"].add(101)
+    expected["connection:alive"].add(202)
+    assert await network_pid_sets() == expected
 
 
 def test_split_process_tags_resolves_abbreviations() -> None:

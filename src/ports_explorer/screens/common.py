@@ -67,24 +67,37 @@ ESC_JUMP_WINDOW = 0.12
 """How long an ``escape`` stays pending as a possible Alt+Arrow prefix."""
 
 
+def _cancel_escape_jump(screen: Any) -> None:
+    """Forget a pending Escape so its delayed fallback cannot fire later."""
+    screen._esc_jump_pending = False
+    timer = getattr(screen, "_esc_jump_timer", None)
+    if timer is not None:
+        with suppress(Exception):
+            timer.stop()
+    screen._esc_jump_timer = None
+
+
 def handle_escape_jump(screen: Any, event: Any, table: Any, fallback: Any) -> bool:
     """Treat ``escape`` + arrow (how terminals encode Option+Arrow) as a jump.
 
     Esc on its own still performs ``fallback`` — just 120ms later — so normal
-    back/clear behaviour is unchanged to the user. Consumes the event when it
-    handled it, so bindings don't also act on the same keystroke.
+    back/clear behaviour is unchanged to the user. Any other key in that window
+    cancels the pending fallback: otherwise Esc followed immediately by another
+    keystroke would perform both actions (clear a just-typed search, leave a
+    screen the user had just switched tabs on).
     """
     if event.key == "escape":
+        _cancel_escape_jump(screen)
         screen._esc_jump_at = time.monotonic()
         screen._esc_jump_row = table.cursor_row if table is not None else 0
         screen._esc_jump_pending = True
-        # A lone escape still acts like escape; the short timer lets a paired
-        # arrow from the terminal cancel it before it fires.
-        previous = getattr(screen, "_esc_jump_timer", None)
-        if previous is not None:
-            with suppress(Exception):
-                previous.stop()
-        screen._esc_jump_timer = screen.set_timer(ESC_JUMP_WINDOW, fallback)
+
+        def fire() -> None:
+            screen._esc_jump_pending = False
+            screen._esc_jump_timer = None
+            fallback()
+
+        screen._esc_jump_timer = screen.set_timer(ESC_JUMP_WINDOW, fire)
         event.stop()
         return True
 
@@ -94,17 +107,14 @@ def handle_escape_jump(screen: Any, event: Any, table: Any, fallback: Any) -> bo
         and time.monotonic() - screen._esc_jump_at <= ESC_JUMP_WINDOW
     ):
         event.stop()
-        screen._esc_jump_pending = False
-        timer = getattr(screen, "_esc_jump_timer", None)
-        if timer is not None:
-            with suppress(Exception):
-                timer.stop()
-        screen._esc_jump_timer = None
+        _cancel_escape_jump(screen)
         if table is not None and table.row_count:
             step = 10 if event.key == "down" else -10
             target = max(0, min(table.row_count - 1, screen._esc_jump_row + step))
             table.move_cursor(row=target)
         return True
+
+    _cancel_escape_jump(screen)
     return False
 
 

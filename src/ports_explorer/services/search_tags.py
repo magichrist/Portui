@@ -32,11 +32,13 @@ import asyncio
 import re
 import socket
 from collections.abc import Callable, Mapping, Sequence
+from contextlib import suppress
 from dataclasses import dataclass
 from subprocess import SubprocessError
 
 import psutil
 
+from ..config import get_settings
 from ..models import ProcessRecord, ResourceRecord, SocketState, TransportProtocol
 from .resource_search import ResourceFilter, search_resources
 
@@ -148,24 +150,35 @@ def resolve_tag(key: str, value: str) -> SearchTag | None:
     return found[0] if len(found) == 1 else None
 
 
+def _strip_tag_tokens(query: str) -> tuple[str, list[tuple[SearchTag, re.Match[str]]]]:
+    """Remove recognised tags without reformatting the rest of the query.
+
+    The old ``" ".join(remaining.split())`` normalised whitespace everywhere,
+    including inside quoted paths. Rebuilding from the untouched slices keeps
+    phrases like ``path="/tmp/a  b"`` byte-for-byte intact.
+    """
+    found: list[tuple[SearchTag, re.Match[str]]] = []
+    parts: list[str] = []
+    last = 0
+    for match in _TAG_TOKEN.finditer(query or ""):
+        tag = resolve_tag(match.group("key"), match.group("value"))
+        if tag is None:
+            continue
+        found.append((tag, match))
+        parts.append(query[last : match.start()])
+        last = match.end()
+    parts.append(query[last:])
+    return "".join(parts).strip(), found
+
+
 def split_tags(query: str) -> tuple[str, list[Predicate]]:
     """Strip recognized tags from ``query`` and return their predicates.
 
     Unknown ``key:value`` tokens are left untouched so they still reach the
     normal search (and so the UI never silently drops a filter it cannot parse).
     """
-    predicates: list[Predicate] = []
-
-    def replace(match: re.Match[str]) -> str:
-        tag = resolve_tag(match.group("key"), match.group("value"))
-        if tag is None:
-            return match.group(0)
-        predicates.append(tag.matches)
-        return " "
-
-    remaining = _TAG_TOKEN.sub(replace, query or "")
-    # Collapse the gaps left by removed tags; keep quoted phrases intact.
-    return " ".join(remaining.split()), predicates
+    remaining, found = _strip_tag_tokens(query)
+    return remaining, [tag.matches for tag, _ in found]
 
 
 def apply_tags(
@@ -249,8 +262,19 @@ def _lsof_local_port(value: str) -> int | None:
     return int(port) if port.isdigit() else None
 
 
+def _kill_child(process: asyncio.subprocess.Process) -> None:
+    """Best-effort kill of a child we are no longer going to wait for."""
+    if getattr(process, "returncode", None) is None:
+        with suppress(ProcessLookupError, OSError):
+            process.kill()
+
+
 async def _lsof_pid_sets() -> dict[str, set[int]]:
-    """macOS fallback: unprivileged psutil hides PIDs, but lsof reports them."""
+    """macOS fallback: unprivileged psutil hides PIDs, but lsof reports them.
+
+    Uses the configured lsof timeout and kills the child on timeout or
+    cancellation, matching :meth:`LsofCollector.collect`'s safety contract.
+    """
     sets = _empty_pid_sets()
     try:
         process = await asyncio.create_subprocess_exec(
@@ -261,9 +285,21 @@ async def _lsof_pid_sets() -> dict[str, set[int]]:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
         )
-        stdout, _ = await process.communicate()
     except (OSError, SubprocessError):
         return sets
+
+    try:
+        stdout, _ = await asyncio.wait_for(
+            process.communicate(), timeout=get_settings().lsof_timeout
+        )
+    except (OSError, SubprocessError, TimeoutError):
+        _kill_child(process)
+        with suppress(OSError):
+            await process.wait()
+        return sets
+    except asyncio.CancelledError:
+        _kill_child(process)
+        raise
 
     pid: int | None = None
     for line in stdout.decode(errors="replace").splitlines():
@@ -280,14 +316,15 @@ async def _lsof_pid_sets() -> dict[str, set[int]]:
 async def network_pid_sets() -> dict[str, set[int]]:
     """Map each tag to the PIDs currently in its TCP state group.
 
-    psutil is tried first (one cheap system-wide call). On macOS an unprivileged
-    process sees no PIDs there, so we fall back to a single ``lsof`` query that
-    reports both the PID and the state of every TCP descriptor.
+    psutil and lsof see different subsets of the system: an unprivileged psutil
+    may report only the caller's sockets while lsof reports every user's PIDs.
+    Merging both sources is the only way to answer `port:open` / `connection:*`
+    for the whole machine. Returning psutil alone whenever it happened to see
+    *any* PID silently dropped every other user's process.
     """
     sets = _psutil_pid_sets()
-    if any(sets.values()):
-        return sets
-    return await _lsof_pid_sets()
+    from_lsof = await _lsof_pid_sets()
+    return {label: sets[label] | from_lsof.get(label, set()) for label in sets}
 
 
 ProcessPredicate = Callable[[ProcessRecord], bool]
@@ -299,15 +336,9 @@ def split_process_tags(
     pids: Mapping[str, set[int]],
 ) -> tuple[str, list[ProcessPredicate]]:
     """Strip tags from a process-list query, returning PID-based predicates."""
+    remaining, found = _strip_tag_tokens(query)
     predicates: list[ProcessPredicate] = []
-
-    def replace(match: re.Match[str]) -> str:
-        tag = resolve_tag(match.group("key"), match.group("value"))
-        if tag is None:
-            return match.group(0)
+    for tag, _ in found:
         tag_pids = pids.get(tag.label, set())
         predicates.append(lambda process, tag_pids=tag_pids: process.pid in tag_pids)
-        return " "
-
-    remaining = _TAG_TOKEN.sub(replace, query or "")
-    return " ".join(remaining.split()), predicates
+    return remaining, predicates

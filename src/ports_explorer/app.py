@@ -108,7 +108,9 @@ class PortsExplorerApp(App):
         guarded on its own so one unmounted widget cannot skip the rest.
         """
         for screen in self.screen_stack:
-            for widget in screen.query("*"):
+            # `query("*")` returns descendants only, so include the screens
+            # themselves: their inline-styled tables and text need repainting too.
+            for widget in (screen, *screen.query("*")):
                 for hook in ("refresh_content", "render_overview", "render_detail"):
                     redraw = getattr(widget, hook, None)
                     if callable(redraw):

@@ -147,6 +147,17 @@ class ResourceBrowserScreen(ResponsiveMixin, Screen[None]):
         self._apply(search.value)
         search.focus()
 
+    def refresh_content(self) -> None:
+        """Repaint inline-styled cells with the currently active palette."""
+        with suppress(Exception):
+            self._apply(self._current_query())
+
+    def _current_query(self) -> str:
+        try:
+            return self.query_one("#browser-search", Input).value
+        except Exception:
+            return ""
+
     def _apply(self, query: str) -> None:
         # Semantic tags (port:open / connection:alive and their abbreviations)
         # are stripped before the field search so they never become a literal

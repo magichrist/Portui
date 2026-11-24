@@ -76,7 +76,8 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="SECONDS",
         help=(
             "Seconds between automatic metric refreshes (default: 2). "
-            "Press R in the app to pause or resume it. Use 0 to start paused."
+            "Press Space in the app to pause or resume it (R is a one-shot reload). "
+            "Use 0 to start paused."
         ),
     )
     parser.add_argument(
