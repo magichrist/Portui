@@ -65,7 +65,7 @@ async def test_slash_focuses_search_and_escape_returns_to_table() -> None:
         assert isinstance(screen.focused, Input)
 
         await pilot.press("escape")
-        await pilot.pause()
+        await pilot.pause(0.2)
         assert isinstance(screen.focused, DataTable)
 
 
@@ -91,7 +91,7 @@ async def test_escape_clears_query_before_leaving_the_screen() -> None:
         assert search.value == "launchd"
 
         await pilot.press("escape")
-        await pilot.pause()
+        await pilot.pause(0.2)
         assert search.value == ""
         assert isinstance(app.screen, ProcessListScreen)
 
@@ -114,7 +114,7 @@ async def test_escape_returns_from_detail_to_list() -> None:
     async with app.run_test(size=(120, 40)) as pilot:
         await _open_detail(app, pilot)
         await pilot.press("escape")
-        await pilot.pause()
+        await pilot.pause(0.2)
         assert isinstance(app.screen, ProcessListScreen)
 
 
@@ -209,12 +209,12 @@ async def test_escape_closes_table_filter_before_leaving_screen() -> None:
         await pilot.pause()
 
         await pilot.press("escape")
-        await pilot.pause()
+        await pilot.pause(0.2)
         assert isinstance(app.screen, ProcessDetailScreen)
         assert not screen.query_one("#table-network").has_class("-searching")
 
         await pilot.press("escape")
-        await pilot.pause()
+        await pilot.pause(0.2)
         assert isinstance(app.screen, ProcessListScreen)
 
 
@@ -416,7 +416,7 @@ async def test_resource_search_escape_returns_to_its_parent() -> None:
         assert isinstance(app.screen, ResourceBrowserScreen)
 
         await pilot.press("escape")
-        await pilot.pause()
+        await pilot.pause(0.2)
         assert isinstance(app.screen, ProcessListScreen)
 
 
@@ -439,7 +439,7 @@ async def test_resource_search_escape_clears_query_first() -> None:
         await pilot.pause()
 
         await pilot.press("escape")
-        await pilot.pause()
+        await pilot.pause(0.2)
         assert search.value == ""
         assert isinstance(app.screen, ResourceBrowserScreen)
 
@@ -461,7 +461,7 @@ async def test_resource_detail_back_returns_to_search() -> None:
         assert isinstance(app.screen, ResourceDetailScreen)
 
         await pilot.press("escape")
-        await pilot.pause()
+        await pilot.pause(0.2)
         assert isinstance(app.screen, ProcessListScreen)
 
 
