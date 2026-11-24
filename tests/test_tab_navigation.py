@@ -201,7 +201,7 @@ async def test_escape_still_returns_to_the_process_list() -> None:
         await pilot.press("right")
         await pilot.pause(0.2)
         await pilot.press("escape")
-        await pilot.pause()
+        await pilot.pause(0.2)
         assert isinstance(app.screen, ProcessListScreen)
 
 
