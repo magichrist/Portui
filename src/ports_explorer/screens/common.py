@@ -78,9 +78,13 @@ def handle_escape_jump(screen: Any, event: Any, table: Any, fallback: Any) -> bo
         screen._esc_jump_at = time.monotonic()
         screen._esc_jump_row = table.cursor_row if table is not None else 0
         screen._esc_jump_pending = True
-        # A single escape must still act like escape; doing it after the current
-        # refresh means a paired arrow (same input batch) can cancel it first.
-        screen.call_after_refresh(fallback)
+        # A lone escape still acts like escape; the short timer lets a paired
+        # arrow from the terminal cancel it before it fires.
+        previous = getattr(screen, "_esc_jump_timer", None)
+        if previous is not None:
+            with suppress(Exception):
+                previous.stop()
+        screen._esc_jump_timer = screen.set_timer(ESC_JUMP_WINDOW, fallback)
         event.stop()
         return True
 
@@ -91,6 +95,11 @@ def handle_escape_jump(screen: Any, event: Any, table: Any, fallback: Any) -> bo
     ):
         event.stop()
         screen._esc_jump_pending = False
+        timer = getattr(screen, "_esc_jump_timer", None)
+        if timer is not None:
+            with suppress(Exception):
+                timer.stop()
+        screen._esc_jump_timer = None
         if table is not None and table.row_count:
             step = 10 if event.key == "down" else -10
             target = max(0, min(table.row_count - 1, screen._esc_jump_row + step))
