@@ -33,6 +33,7 @@ import re
 import socket
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from subprocess import SubprocessError
 
 import psutil
 
@@ -261,7 +262,7 @@ async def _lsof_pid_sets() -> dict[str, set[int]]:
             stderr=asyncio.subprocess.DEVNULL,
         )
         stdout, _ = await process.communicate()
-    except (OSError, asyncio.SubprocessError):
+    except (OSError, SubprocessError):
         return sets
 
     pid: int | None = None
