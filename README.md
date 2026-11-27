@@ -46,7 +46,7 @@ Requires **Python 3.12+** and macOS `lsof`.
 
 ```bash
 brew install lsof
-git clone <your-fork-or-this-repository>
+git clone https://github.com/magichrist/Portui
 cd ports-explorer
 python3 -m pip install -e .
 ```
